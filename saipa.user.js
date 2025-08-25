@@ -603,6 +603,7 @@
             </div>
             <input type="text" id="sales-plan-input" class="saipa-bot-input" placeholder="نام طرح فروش (اختیاری)">
             <input type="number" id="price-term-input" class="saipa-bot-input" placeholder="قیمت (اختیاری)">
+            <input type="text" id="city-term-input" class="saipa-bot-input" placeholder="نام شهر (اختیاری)">
             <select id="sale-type-input" class="saipa-bot-input">
               <option value="">همه نوع فروش</option>
               <option value="3">فروش فوری</option>
@@ -631,8 +632,9 @@
             const priceTerm = parseInt(document.getElementById('price-term-input').value.trim()) || null;
             const saleTypeFilter = document.getElementById('sale-type-input').value.trim();
             const exactMatch = document.getElementById('exact-match-checkbox').checked;
+            const specificCity = document.getElementById('city-term-input').value.trim();
             if (searchTerm && !isSearching) {
-                startCarSearch(searchTerm, salesPlanTerm, priceTerm, saleTypeFilter, exactMatch);
+                startCarSearch(searchTerm, salesPlanTerm, priceTerm, saleTypeFilter, exactMatch, specificCity);
             } else if (isSearching) {
                 alert("در حال جستجو...");
             } else {
@@ -641,7 +643,7 @@
         });
     }
 
-    async function startCarSearch(searchTerm, salesPlanTerm, priceTerm, saleTypeFilter, exactMatch) {
+    async function startCarSearch(searchTerm, salesPlanTerm, priceTerm, saleTypeFilter, exactMatch, specificCity) {
         isSearching = true;
         const statusDiv = document.getElementById('search-status');
         const searchButton = document.getElementById('search-button');
@@ -663,7 +665,7 @@
                 if (foundItem) {
                     statusDiv.textContent = `"${foundItem.title}" یافت شد! پردازش...`;
                     isSearching = false;
-                    handleItemButtonClick(foundItem, salesPlanTerm, priceTerm, saleTypeFilter);
+                    handleItemButtonClick(foundItem, salesPlanTerm, priceTerm, saleTypeFilter, specificCity);
                 } else {
                     statusDiv.textContent = `"${searchTerm}" یافت نشد. تلاش مجدد...`;
                     await new Promise(resolve => setTimeout(resolve, 3000));
@@ -690,7 +692,7 @@
         }
     }
 
-    function handleItemButtonClick(item, salesPlanTerm, priceTerm, saleTypeFilter) {
+    function handleItemButtonClick(item, salesPlanTerm, priceTerm, saleTypeFilter, specificCity) {
         contentAreaContainer.innerHTML = '';
         const carDetailsDiv = document.createElement('div');
         carDetailsDiv.classList.add('saipa-bot-card');
@@ -700,7 +702,7 @@
             <div id="process-status">شروع مراحل ثبت نام...</div>
         `;
         contentAreaContainer.appendChild(carDetailsDiv);
-        fetchData(item.id, salesPlanTerm, priceTerm, saleTypeFilter);
+        fetchData(item.id, salesPlanTerm, priceTerm, saleTypeFilter, specificCity);
     }
 
     function updateProcessStatus(message, isError = false) {
@@ -712,10 +714,7 @@
         }
     }
 
-    // --- The rest of the script's logic remains the same ---
-    // (This ensures the core functionality is not broken)
-
-    async function fetchData(carModelId, salesPlanTerm = "", priceTerm = null, saleTypeFilter = "") {
+    async function fetchData(carModelId, salesPlanTerm = "", priceTerm = null, saleTypeFilter = "", specificCity = "") {
         updateProcessStatus('دریافت اطلاعات طرح‌های فروش...');
         try {
             let result = null;
@@ -765,8 +764,8 @@
             let selectedBranch = null;
 
             while (!selectedBranch) {
-                updateProcessStatus('دریافت نمایندگی...');
-                const requestDatacity = { provinceId: 21, circulationId: result.id };
+                updateProcessStatus('دریافت لیست شهرها...');
+                const requestDatacity = { provinceId: 4, circulationId: result.id };
                 const cityResponse = await fetch(circulationbranchcity, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestDatacity) });
                 const availableCities = await cityResponse.json();
 
@@ -776,17 +775,28 @@
                     continue;
                 }
 
-                const randomCity = availableCities[Math.floor(Math.random() * availableCities.length)];
-                updateProcessStatus(`شهر "${randomCity.title}" انتخاب شد.`);
+                let targetCity = null;
+                if (specificCity) {
+                    targetCity = availableCities.find(city => city.title.includes(specificCity));
+                    if (!targetCity) {
+                         updateProcessStatus(`شهر "${specificCity}" یافت نشد. انتخاب شهر تصادفی...`, true);
+                    }
+                }
 
-                const requestDatacityBranch = { cityCode: randomCity.code, circulationId: result.id };
+                if (!targetCity) { // If no specific city OR specific city not found, pick a random one.
+                    targetCity = availableCities[Math.floor(Math.random() * availableCities.length)];
+                }
+
+                updateProcessStatus(`شهر "${targetCity.title}" انتخاب شد.`);
+
+                const requestDatacityBranch = { cityCode: targetCity.code, circulationId: result.id };
                 const branchResponse = await fetch(circilationbranchcityget, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestDatacityBranch) });
                 const branches = await branchResponse.json();
 
                 if (branches?.length) {
                     selectedBranch = branches[Math.floor(Math.random() * branches.length)];
                 } else {
-                    updateProcessStatus(`نمایندگی در شهر "${randomCity.title}" یافت نشد. تلاش با شهری دیگر...`, true);
+                    updateProcessStatus(`نمایندگی در شهر "${targetCity.title}" یافت نشد. تلاش با شهری دیگر...`, true);
                     await new Promise(resolve => setTimeout(resolve, 1500));
                 }
             }
@@ -863,8 +873,8 @@
         updateProcessStatus("ورود به صف...");
         const token = getTokenFromCookies("token");
         const requestDataCheckResult = { orderId, queueId };
-        for (let i = 0; i < 30; i++) {
-            updateProcessStatus(`بررسی وضعیت صف (${i+1}/30)...`);
+        for (let i = 0; i < 3000; i++) {
+            updateProcessStatus(`بررسی وضعیت صف (${i+1}/3000)...`);
             const response = await fetch(checkresult, { method: "POST", headers: { 'Content-Type': 'application/json', "Authorization": `Bearer ${token}` }, body: JSON.stringify(requestDataCheckResult) });
             const loopData = await response.json();
 

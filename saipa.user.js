@@ -300,7 +300,6 @@
         .saipa-button-new-captcha { bottom: 165px !important; background-color: var(--dark-warning);
         }
         .saipa-button-new-captcha.auto-on svg { fill: lightgreen; }
-        .saipa-button-new-update { bottom: 235px !important; background-color: var(--dark-primary); }
     `;
     const styleSheet = document.createElement("style");
     styleSheet.innerText = styles;
@@ -598,6 +597,10 @@
         searchAreaDiv.innerHTML = `
             <h2 style="font-size: 1.4em; text-align: center; color: var(--dark-primary); margin:0;">جستجوی خودرو</h2>
             <input type="text" id="search-term-input" class="saipa-bot-input" placeholder="نام خودرو (مثال: شاهین)">
+            <div style="display: flex; align-items: center; gap: 10px; margin-top: 5px;">
+              <input type="checkbox" id="exact-match-checkbox" style="width: auto; height: auto;">
+              <label for="exact-match-checkbox" style="font-size: 14px; color: var(--dark-text-muted);">جستجوی دقیق نام خودرو</label>
+            </div>
             <input type="text" id="sales-plan-input" class="saipa-bot-input" placeholder="نام طرح فروش (اختیاری)">
             <input type="number" id="price-term-input" class="saipa-bot-input" placeholder="قیمت (اختیاری)">
             <select id="sale-type-input" class="saipa-bot-input">
@@ -627,8 +630,9 @@
             const salesPlanTerm = document.getElementById('sales-plan-input').value.trim();
             const priceTerm = parseInt(document.getElementById('price-term-input').value.trim()) || null;
             const saleTypeFilter = document.getElementById('sale-type-input').value.trim();
+            const exactMatch = document.getElementById('exact-match-checkbox').checked;
             if (searchTerm && !isSearching) {
-                startCarSearch(searchTerm, salesPlanTerm, priceTerm, saleTypeFilter);
+                startCarSearch(searchTerm, salesPlanTerm, priceTerm, saleTypeFilter, exactMatch);
             } else if (isSearching) {
                 alert("در حال جستجو...");
             } else {
@@ -637,7 +641,7 @@
         });
     }
 
-    async function startCarSearch(searchTerm, salesPlanTerm, priceTerm, saleTypeFilter) {
+    async function startCarSearch(searchTerm, salesPlanTerm, priceTerm, saleTypeFilter, exactMatch) {
         isSearching = true;
         const statusDiv = document.getElementById('search-status');
         const searchButton = document.getElementById('search-button');
@@ -650,7 +654,12 @@
             if (!isSearching) break;
 
             if (items) {
-                foundItem = items.find(item => item.title.toLowerCase().includes(searchTerm.toLowerCase()));
+                if (exactMatch) {
+                    foundItem = items.find(item => item.title.trim().toLowerCase() === searchTerm.toLowerCase());
+                } else {
+                    foundItem = items.find(item => item.title.toLowerCase().includes(searchTerm.toLowerCase()));
+                }
+
                 if (foundItem) {
                     statusDiv.textContent = `"${foundItem.title}" یافت شد! پردازش...`;
                     isSearching = false;
@@ -920,8 +929,7 @@
             { id: 'saipa-bot-toggle-button-new', title: 'باز/بسته کردن پنل', icon: `<path d="M3.79,16.29C3.4,16.68,3.4,17.31,3.79,17.7l3.59,3.59C7.76,21.68,8.39,21.68,8.78,21.29l11-11 c0.39-0.39,0.39-1.02,0-1.41l-3.59-3.59C15.81,4.92,15.18,4.92,14.79,5.32L3.79,16.29z M19,3c-1.1,0-2,0.9-2,2s0.9,2,2,2s2-0.9,2-2 S20.1,3,19,3z"/>`, onClick: () => { mainContainer.style.display = (window.getComputedStyle(mainContainer).display === 'none') ? 'flex' : 'none'; }},
             { className: 'saipa-button-new-reload', title: 'بارگذاری مجدد', icon: `<path d="M17.65,6.35C16.2,4.9,14.21,4,12,4c-4.42,0-7.99,3.58-7.99,8s3.57,8,7.99,8c3.73,0,6.84-2.55,7.73-6h-2.08 c-0.82,2.33-3.04,4-5.65,4c-3.31,0-6-2.69-6-6s2.69-6,6-6c1.66,0,3.14,0.69,4.22,1.78L13,11h7V4L17.65,6.35z"/>`, onClick: reloadContent },
             { className: 'saipa-button-new-clear', title: 'پاک کردن کوکی‌ها', icon: `<path d="M6,19c0,1.1,0.9,2,2,2h8c1.1,0,2-0.9,2-2V7H6V19z M19,4h-3.5l-1-1h-5l-1-1H5v2h14V4z"/>`, onClick: clearSiteCookies },
-            { className: 'saipa-button-new-captcha', title: 'کپچای خودکار', icon: ``, onClick: toggleAutoCaptcha, isCaptcha: true },
-            { className: 'saipa-button-new-update', title: 'آپدیت اسکریپت', icon: `<path d="M12 16.5l4-4h-3v-9h-2v9H8l4 4zm9-13h-6v1.99h6v14.03H3V5.49h6V3.5H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2v-14c0-1.1-.9-2-2-2z"/>`, onClick: () => { window.open('https://github.com/masoudes72/saipa/raw/refs/heads/main/saipa.user.js', '_blank'); } }
+            { className: 'saipa-button-new-captcha', title: 'کپچای خودکار', icon: ``, onClick: toggleAutoCaptcha, isCaptcha: true }
         ];
         fabDefs.forEach(def => {
             const button = document.createElement('button');

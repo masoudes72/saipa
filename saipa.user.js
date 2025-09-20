@@ -275,31 +275,85 @@
         box-shadow: 0 0 0 0 rgba(0, 0, 0, 0); } }
 
         /* Floating Buttons */
-        .saipa-fab {
+        #saipa-bot-toggle-button-new {
             position: fixed !important;
-            right: 25px !important; z-index: 10001 !important; display: flex; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 50%;
-            border: 1px solid var(--dark-border); cursor: pointer; box-shadow: 0 5px 15px rgba(0,0,0,0.3); transition: var(--dark-transition); background: var(--dark-surface);
+            top: 25px !important;
+            right: 25px !important;
+            width: auto !important;
+            height: 45px !important;
+            padding: 0 20px !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 10px !important;
+            color: var(--dark-text) !important;
+            background: var(--dark-primary) !important;
+            border-radius: 28px !important;
+            cursor: pointer !important;
+            z-index: 10001 !important;
+            border: none !important;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3) !important;
+            transition: var(--dark-transition) !important;
         }
-        .saipa-fab:hover { transform: translateY(-3px) scale(1.05); box-shadow: 0 0 20px var(--dark-primary-glow); border-color: var(--dark-primary);
+        #saipa-bot-toggle-button-new:hover {
+            background: var(--dark-secondary) !important;
+            transform: translateY(-2px) !important;
         }
-        .saipa-fab svg { width: 24px; height: 24px; fill: var(--dark-text); transition: var(--dark-transition);
+        #saipa-bot-toggle-button-new svg {
+            width: 24px !important;
+            height: 24px !important;
+            fill: white !important;
         }
-        .saipa-fab:hover svg { fill: var(--dark-primary);
+
+        /* Action Buttons */
+        .saipa-action-button {
+            position: fixed !important;
+            right: 25px !important;
+            z-index: 10001 !important;
+            width: 56px !important;
+            height: 56px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            border-radius: 50% !important;
+            background: var(--dark-surface) !important;
+            border: 1px solid var(--dark-border) !important;
+            cursor: pointer !important;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3) !important;
+            transition: var(--dark-transition) !important;
         }
-        #saipa-bot-toggle-button-new { top: 25px !important; right: 25px !important; width: auto;
-        padding: 0 20px; gap: 10px; color: var(--dark-text); border-radius: 28px; background: var(--dark-primary);
+        .saipa-action-button:hover {
+            transform: translateY(-3px) scale(1.05) !important;
+            box-shadow: 0 0 20px var(--dark-primary-glow) !important;
+            border-color: var(--dark-primary) !important;
         }
-        #saipa-bot-toggle-button-new:hover { background: var(--dark-secondary);
+        .saipa-action-button svg {
+            width: 24px !important;
+            height: 24px !important;
+            fill: var(--dark-text) !important;
+            transition: var(--dark-transition) !important;
         }
-        #saipa-bot-toggle-button-new svg { fill: white;
+        .saipa-action-button:hover svg {
+            fill: var(--dark-primary) !important;
         }
-        .saipa-button-new-reload { bottom: 25px !important; background-color: var(--dark-success);
+        .saipa-button-new-reload {
+            bottom: 25px !important;
+            background-color: var(--dark-success) !important;
         }
-        .saipa-button-new-clear { bottom: 95px !important; background-color: var(--dark-danger);
+        .saipa-button-new-clear {
+            bottom: 95px !important;
+            background-color: var(--dark-danger) !important;
         }
-        .saipa-button-new-captcha { bottom: 165px !important; background-color: var(--dark-warning);
+        .saipa-button-new-captcha {
+            bottom: 165px !important;
+            background-color: var(--dark-warning) !important;
         }
-        .saipa-button-new-captcha.auto-on svg { fill: lightgreen; }
+        .saipa-button-new-update {
+            bottom: 235px !important;
+            background-color: var(--dark-secondary) !important;
+        }
+        .saipa-button-new-captcha.auto-on svg {
+            fill: lightgreen !important;
+        }
 
         /* Product Selection Card Styling */
         .saipa-product-selection-container {
@@ -1041,25 +1095,45 @@
 
     function setupFloatingButtons() {
         const svgNS = "http://www.w3.org/2000/svg";
-        const fabDefs = [
-            { id: 'saipa-bot-toggle-button-new', title: 'باز/بسته کردن پنل', icon: `<path d="M3.79,16.29C3.4,16.68,3.4,17.31,3.79,17.7l3.59,3.59C7.76,21.68,8.39,21.68,8.78,21.29l11-11 c0.39-0.39,0.39-1.02,0-1.41l-3.59-3.59C15.81,4.92,15.18,4.92,14.79,5.32L3.79,16.29z M19,3c-1.1,0-2,0.9-2,2s0.9,2,2,2s2-0.9,2-2 S20.1,3,19,3z"/>`, onClick: () => { mainContainer.style.display = (window.getComputedStyle(mainContainer).display === 'none') ? 'flex' : 'none'; }},
-            { className: 'saipa-button-new-reload', title: 'بارگذاری مجدد', icon: `<path d="M17.65,6.35C16.2,4.9,14.21,4,12,4c-4.42,0-7.99,3.58-7.99,8s3.57,8,7.99,8c3.73,0,6.84-2.55,7.73-6h-2.08 c-0.82,2.33-3.04,4-5.65,4c-3.31,0-6-2.69-6-6s2.69-6,6-6c1.66,0,3.14,0.69,4.22,1.78L13,11h7V4L17.65,6.35z"/>`, onClick: reloadContent },
-            { className: 'saipa-button-new-clear', title: 'پاک کردن کوکی‌ها', icon: `<path d="M6,19c0,1.1,0.9,2,2,2h8c1.1,0,2-0.9,2-2V7H6V19z M19,4h-3.5l-1-1h-5l-1-1H5v2h14V4z"/>`, onClick: clearSiteCookies },
-            { className: 'saipa-button-new-captcha', title: 'کپچای خودکار', icon: ``, onClick: toggleAutoCaptcha, isCaptcha: true }
+
+        // 1. Main Panel Toggle Button (Top Left)
+        const panelToggleButton = document.createElement('button');
+        panelToggleButton.id = 'saipa-bot-toggle-button-new';
+        panelToggleButton.title = 'باز/بسته کردن پنل';
+        panelToggleButton.textContent = 'منوی اصلی';
+        const panelToggleSvg = document.createElementNS(svgNS, "svg");
+        panelToggleSvg.setAttribute("viewBox", "0 0 24 24");
+        panelToggleSvg.innerHTML = `<path d="M4 18h16c.55 0 1-.45 1-1s-.45-1-1-1H4c-.55 0-1 .45-1 1s.45 1 1 1zm0-5h16c.55 0 1-.45 1-1s-.45-1-1-1H4c-.55 0-1 .45-1 1s.45 1 1 1zM3 7c0 .55.45 1 1 1h16c.55 0 1-.45 1-1s-.45-1-1-1H4c-.55 0-1 .45-1 1z"/>`;
+        panelToggleButton.insertBefore(panelToggleSvg, panelToggleButton.firstChild);
+        panelToggleButton.addEventListener('click', () => {
+            mainContainer.style.display = (window.getComputedStyle(mainContainer).display === 'none') ? 'flex' : 'none';
+        });
+        document.body.appendChild(panelToggleButton);
+
+        // 2. Action Buttons (Right Side)
+        const actionButtons = [
+            { title: 'دریافت بروزرسانی', icon: `<path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>`, onClick: () => { window.open('https://github.com/masoudes72/saipa/raw/refs/heads/main/saipa.user.js', '_blank'); }, class: 'saipa-button-new-update' },
+            { title: 'کپچای خودکار', icon: ``, onClick: toggleAutoCaptcha, class: 'saipa-button-new-captcha', isCaptcha: true },
+            { title: 'پاک کردن کوکی‌ها', icon: `<path d="M6,19c0,1.1,0.9,2,2,2h8c1.1,0,2-0.9,2-2V7H6V19z M19,4h-3.5l-1-1h-5l-1-1H5v2h14V4z"/>`, onClick: clearSiteCookies, class: 'saipa-button-new-clear' },
+            { title: 'بارگذاری مجدد', icon: `<path d="M17.65,6.35C16.2,4.9,14.21,4,12,4c-4.42,0-7.99,3.58-7.99,8s3.57,8,7.99,8c3.73,0,6.84-2.55,7.73-6h-2.08 c-0.82,2.33-3.04,4-5.65,4c-3.31,0-6-2.69-6-6s2.69-6,6-6c1.66,0,3.14,0.69,4.22,1.78L13,11h7V4L17.65,6.35z"/>`, onClick: reloadContent, class: 'saipa-button-new-reload' },
         ];
-        fabDefs.forEach(def => {
+
+        actionButtons.forEach(def => {
             const button = document.createElement('button');
-            if(def.id) button.id = def.id;
-            button.className = `saipa-fab ${def.className || ''}`;
+            button.className = `saipa-action-button ${def.class}`;
             button.title = def.title;
+            button.addEventListener('click', def.onClick);
+
             const svg = document.createElementNS(svgNS, "svg");
             svg.setAttribute("viewBox", "0 0 24 24");
-
-            if(def.icon) svg.innerHTML = def.icon;
+            if (def.icon) svg.innerHTML = def.icon;
             button.appendChild(svg);
-            button.addEventListener('click', def.onClick);
+
+            if (def.isCaptcha) {
+                updateCaptchaButtonState(button, svg);
+            }
+
             document.body.appendChild(button);
-            if(def.isCaptcha) updateCaptchaButtonState(button, svg);
         });
     }
 
@@ -1073,10 +1147,11 @@
     }
 
     function updateCaptchaButtonState(button, svg) {
+        if (!button || !svg) return;
         button.classList.toggle('auto-on', isAutoCaptchaEnabled);
         svg.innerHTML = isAutoCaptchaEnabled
-            ? `<path d="M9,16.2L4.8,12l-1.4,1.4L9,19,21,7l-1.4-1.4L9,16.2z"/>`
-            : `<path d="M19,6.41L17.59,5,12,10.59,6.41,5,5,6.41,10.59,12,5,17.59,6.41,19,12,13.41,17.59,19,19,17.59,13.41,12,19,6.41z"/>`;
+            ? `<path d="M9,16.2L4.8,12l-1.4,1.4L9,19,21,7l-1.4-1.4L9,16.2z"/>` // Check icon
+            : `<path d="M19,6.41L17.59,5,12,10.59,6.41,5,5,6.41,10.59,12,5,17.59,6.41,19,12,13.41,17.59,19,19,17.59,13.41,12,19,6.41z"/>`; // Close icon
     }
 
     function clearSiteCookies() {

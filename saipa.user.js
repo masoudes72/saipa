@@ -300,6 +300,42 @@
         .saipa-button-new-captcha { bottom: 165px !important; background-color: var(--dark-warning);
         }
         .saipa-button-new-captcha.auto-on svg { fill: lightgreen; }
+
+        /* Product Selection Card Styling */
+        .saipa-product-selection-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 20px;
+            width: 100%;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+        .saipa-product-card {
+            background-color: var(--dark-surface);
+            border-radius: var(--dark-radius);
+            border: 1px solid var(--dark-border);
+            cursor: pointer;
+            transition: var(--dark-transition);
+            overflow: hidden;
+            text-align: center;
+        }
+        .saipa-product-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--dark-primary);
+            box-shadow: 0 8px 20px var(--dark-primary-glow);
+        }
+        .saipa-product-card img {
+            width: 100%;
+            height: 120px;
+            object-fit: cover;
+            background-color: #fff; /* Fallback for transparent images */
+        }
+        .saipa-product-card-title {
+            padding: 15px 10px;
+            font-weight: 600;
+            font-size: 1em;
+            color: var(--dark-text);
+        }
     `;
     const styleSheet = document.createElement("style");
     styleSheet.innerText = styles;
@@ -627,55 +663,117 @@
 
         contentAreaContainer.appendChild(searchAreaDiv);
         searchButton.addEventListener('click', () => {
-            const searchTerm = document.getElementById('search-term-input').value.trim();
-            const salesPlanTerm = document.getElementById('sales-plan-input').value.trim();
-            const priceTerm = parseInt(document.getElementById('price-term-input').value.trim()) || null;
-            const saleTypeFilter = document.getElementById('sale-type-input').value.trim();
-            const exactMatch = document.getElementById('exact-match-checkbox').checked;
-            const specificCity = document.getElementById('city-term-input').value.trim();
-            if (searchTerm && !isSearching) {
-                startCarSearch(searchTerm, salesPlanTerm, priceTerm, saleTypeFilter, exactMatch, specificCity);
-            } else if (isSearching) {
-                alert("در حال جستجو...");
+            if (isSearching) {
+                stopCarSearch();
             } else {
-                alert("نام خودرو را وارد کنید.");
+                const searchTerm = document.getElementById('search-term-input').value.trim();
+                const salesPlanTerm = document.getElementById('sales-plan-input').value.trim();
+                const priceTerm = parseInt(document.getElementById('price-term-input').value.trim()) || null;
+                const saleTypeFilter = document.getElementById('sale-type-input').value.trim();
+                const exactMatch = document.getElementById('exact-match-checkbox').checked;
+                const specificCity = document.getElementById('city-term-input').value.trim();
+                if (searchTerm) {
+                    startCarSearch(searchTerm, salesPlanTerm, priceTerm, saleTypeFilter, exactMatch, specificCity);
+                } else {
+                    alert("نام خودرو را وارد کنید.");
+                }
             }
         });
+    }
+
+    function stopCarSearch() {
+        isSearching = false;
+        if (searchAbortController) {
+            searchAbortController.abort();
+        }
+        const statusDiv = document.getElementById('search-status');
+        if(statusDiv) statusDiv.textContent = 'جستجو لغو شد.';
+
+        const searchButton = document.getElementById('search-button');
+        if (searchButton) {
+            searchButton.disabled = false;
+            searchButton.querySelector('strong').textContent = 'جستجو';
+        }
     }
 
     async function startCarSearch(searchTerm, salesPlanTerm, priceTerm, saleTypeFilter, exactMatch, specificCity) {
         isSearching = true;
         const statusDiv = document.getElementById('search-status');
         const searchButton = document.getElementById('search-button');
-        if(searchButton) searchButton.disabled = true;
+        if (searchButton) {
+            searchButton.disabled = false; // Keep it enabled to act as a stop button
+            searchButton.querySelector('strong').textContent = 'لغو جستجو';
+        }
 
-        let foundItem = null;
-        while (isSearching && !foundItem) {
+        while (isSearching) {
             statusDiv.textContent = `جستجو برای "${searchTerm}"...`;
             const items = await fetchItemsData();
-            if (!isSearching) break;
+
+            if (!isSearching) break; // If search was cancelled, exit loop
 
             if (items) {
-                if (exactMatch) {
-                    foundItem = items.find(item => item.title.trim().toLowerCase() === searchTerm.toLowerCase());
-                } else {
-                    foundItem = items.find(item => item.title.toLowerCase().includes(searchTerm.toLowerCase()));
-                }
+                 const foundItems = items.filter(item => {
+                    const title = item.title.trim().toLowerCase();
+                    const term = searchTerm.toLowerCase();
+                    return exactMatch ? title === term : title.includes(term);
+                });
 
-                if (foundItem) {
-                    statusDiv.textContent = `"${foundItem.title}" یافت شد! پردازش...`;
+                if (foundItems.length === 1) {
                     isSearching = false;
+                    const foundItem = foundItems[0];
+                    statusDiv.textContent = `یک خودرو "${foundItem.title}" یافت شد. در حال پردازش...`;
                     handleItemButtonClick(foundItem, salesPlanTerm, priceTerm, saleTypeFilter, specificCity);
+                } else if (foundItems.length > 1) {
+                    isSearching = false;
+                    statusDiv.textContent = `${foundItems.length} خودرو یافت شد. لطفاً یکی را انتخاب کنید.`;
+                    displayProductSelection(foundItems, salesPlanTerm, priceTerm, saleTypeFilter, specificCity);
                 } else {
-                    statusDiv.textContent = `"${searchTerm}" یافت نشد. تلاش مجدد...`;
-                    await new Promise(resolve => setTimeout(resolve, 3000));
+                    statusDiv.textContent = `خودرویی با نام "${searchTerm}" یافت نشد. تلاش مجدد...`;
+                    await new Promise(resolve => setTimeout(resolve, 1500));
                 }
             } else {
-                statusDiv.textContent = "خطا در دریافت لیست. تلاش مجدد...";
-                await new Promise(resolve => setTimeout(resolve, 5000));
+                statusDiv.textContent = "خطا در دریافت لیست خودروها. تلاش مجدد...";
+                await new Promise(resolve => setTimeout(resolve, 5000)); // Wait longer on API error
             }
         }
-        if(searchButton) searchButton.disabled = false;
+
+        // Reset button if loop finishes (e.g. was cancelled)
+        if (!isSearching) {
+            stopCarSearch();
+        }
+    }
+
+    function displayProductSelection(items, salesPlanTerm, priceTerm, saleTypeFilter, specificCity) {
+        // Clear the search UI and show the selection grid
+        contentAreaContainer.innerHTML = '';
+
+        const container = document.createElement('div');
+        container.className = 'saipa-product-selection-container';
+
+        items.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'saipa-product-card';
+            card.onclick = () => {
+                // Disable all cards after one is clicked
+                container.querySelectorAll('.saipa-product-card').forEach(c => c.style.pointerEvents = 'none');
+                handleItemButtonClick(item, salesPlanTerm, priceTerm, saleTypeFilter, specificCity);
+            };
+
+            const img = document.createElement('img');
+            // Assuming item.imageUrl holds the image URL. If not, this will need adjustment.
+            img.src = item.imageUrl || 'https://via.placeholder.com/300x200.png?text=No+Image';
+            img.alt = item.title;
+
+            const title = document.createElement('div');
+            title.className = 'saipa-product-card-title';
+            title.textContent = item.title;
+
+            card.appendChild(img);
+            card.appendChild(title);
+            container.appendChild(card);
+        });
+
+        contentAreaContainer.appendChild(container);
     }
 
     async function fetchItemsData() {
@@ -715,98 +813,106 @@
     }
 
     async function fetchData(carModelId, salesPlanTerm = "", priceTerm = null, saleTypeFilter = "", specificCity = "") {
-        updateProcessStatus('دریافت اطلاعات طرح‌های فروش...');
-        try {
-            let result = null;
-            while (result === null) {
-                const url = `${circulationApiUrl}?carModelId=${carModelId}`;
-                const response = await fetch(url);
-                const data = await response.json();
-                if (!data?.data?.length) {
-                    updateProcessStatus("هیچ طرح فعالی یافت نشد. تلاش مجدد...", true);
-                    await new Promise(resolve => setTimeout(resolve, 5000));
-                    continue;
-                }
+        while (true) {
+            try {
+                updateProcessStatus('دریافت اطلاعات طرح‌های فروش...');
+                let result = null;
+                while (result === null) {
+                    const url = `${circulationApiUrl}?carModelId=${carModelId}`;
+                    const response = await fetch(url);
+                    if (!response.ok) throw new Error(`خطای شبکه در دریافت طرح فروش: ${response.statusText}`);
+                    const data = await response.json();
 
-                let plans = data.data;
-                if (saleTypeFilter) {
-                    plans = plans.filter(plan => plan.saleType === saleTypeFilter);
-                }
+                    if (!data?.data?.length) {
+                        updateProcessStatus("هیچ طرح فعالی یافت نشد. تلاش مجدد...", true);
+                        await new Promise(resolve => setTimeout(resolve, 5000));
+                        continue;
+                    }
 
-                let foundPlan = null;
-                if (plans && plans.length > 0) {
-                    if (salesPlanTerm) {
-                        foundPlan = plans.find(plan =>
-                            (plan.title?.toLowerCase() + plan.titleDetails?.toLowerCase())
-                            .includes(salesPlanTerm.toLowerCase())
-                        );
-                    } else if (priceTerm) {
-                        foundPlan = plans.reduce((prev, curr) => {
-                            const prevDiff = Math.abs(Number(prev.basePrice || 0) - priceTerm);
-                            const currDiff = Math.abs(Number(curr.basePrice || 0) - priceTerm);
-                            return (currDiff < prevDiff ? curr : prev);
-                        });
+                    let plans = data.data;
+                    if (saleTypeFilter) {
+                        plans = plans.filter(plan => plan.saleType === saleTypeFilter);
+                    }
+
+                    let foundPlan = null;
+                    if (plans && plans.length > 0) {
+                        if (salesPlanTerm) {
+                            foundPlan = plans.find(plan =>
+                                (plan.title?.toLowerCase() + plan.titleDetails?.toLowerCase())
+                                .includes(salesPlanTerm.toLowerCase())
+                            );
+                        } else if (priceTerm) {
+                            foundPlan = plans.reduce((prev, curr) => {
+                                const prevDiff = Math.abs(Number(prev.basePrice || 0) - priceTerm);
+                                const currDiff = Math.abs(Number(curr.basePrice || 0) - priceTerm);
+                                return (currDiff < prevDiff ? curr : prev);
+                            });
+                        } else {
+                            foundPlan = plans[0];
+                        }
+                    }
+
+                    if (foundPlan) {
+                        updateProcessStatus(`طرح "${foundPlan.title}" با قیمت ${foundPlan.basePrice} انتخاب شد.`);
+                        result = foundPlan;
                     } else {
-                        foundPlan = plans[0];
+                        updateProcessStatus(`طرح "${salesPlanTerm || 'مناسب'}" یافت نشد. تلاش مجدد...`, true);
+                        await new Promise(resolve => setTimeout(resolve, 3000));
                     }
                 }
 
-                if (foundPlan) {
-                    updateProcessStatus(`طرح "${foundPlan.title}" با قیمت ${foundPlan.basePrice} انتخاب شد.`);
-                    result = foundPlan;
-                } else {
-                    updateProcessStatus(`طرح "${salesPlanTerm || 'مناسب'}" یافت نشد. تلاش مجدد...`, true);
-                    await new Promise(resolve => setTimeout(resolve, 3000));
-                }
-            }
+                const checkedIds = result.options.filter(o => o.isChecked).map(o => o.id);
+                let selectedBranch = null;
 
-            const checkedIds = result.options.filter(o => o.isChecked).map(o => o.id);
-            let selectedBranch = null;
+                while (!selectedBranch) {
+                    updateProcessStatus('دریافت لیست شهرها...');
+                    const requestDatacity = { provinceId: 4, circulationId: result.id };
+                    const cityResponse = await fetch(circulationbranchcity, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestDatacity) });
+                     if (!cityResponse.ok) throw new Error(`خطای شبکه در دریافت شهرها: ${cityResponse.statusText}`);
+                    const availableCities = await cityResponse.json();
 
-            while (!selectedBranch) {
-                updateProcessStatus('دریافت لیست شهرها...');
-                const requestDatacity = { provinceId: 4, circulationId: result.id };
-                const cityResponse = await fetch(circulationbranchcity, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestDatacity) });
-                const availableCities = await cityResponse.json();
+                    if (!availableCities?.length) {
+                        updateProcessStatus(`هیچ شهری یافت نشد. تلاش مجدد...`, true);
+                        await new Promise(resolve => setTimeout(resolve, 3000));
+                        continue;
+                    }
 
-                if (!availableCities?.length) {
-                    updateProcessStatus(`هیچ شهری یافت نشد. تلاش مجدد...`, true);
-                    await new Promise(resolve => setTimeout(resolve, 3000));
-                    continue;
-                }
+                    let targetCity = null;
+                    if (specificCity) {
+                        targetCity = availableCities.find(city => city.title.includes(specificCity));
+                        if (!targetCity) {
+                            updateProcessStatus(`شهر "${specificCity}" یافت نشد. انتخاب شهر تصادفی...`, true);
+                        }
+                    }
 
-                let targetCity = null;
-                if (specificCity) {
-                    targetCity = availableCities.find(city => city.title.includes(specificCity));
                     if (!targetCity) {
-                         updateProcessStatus(`شهر "${specificCity}" یافت نشد. انتخاب شهر تصادفی...`, true);
+                        targetCity = availableCities[Math.floor(Math.random() * availableCities.length)];
+                    }
+
+                    updateProcessStatus(`شهر "${targetCity.title}" انتخاب شد.`);
+
+                    const requestDatacityBranch = { cityCode: targetCity.code, circulationId: result.id };
+                    const branchResponse = await fetch(circilationbranchcityget, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestDatacityBranch) });
+                    if (!branchResponse.ok) throw new Error(`خطای شبکه در دریافت نمایندگی: ${branchResponse.statusText}`);
+                    const branches = await branchResponse.json();
+
+                    if (branches?.length) {
+                        selectedBranch = branches[Math.floor(Math.random() * branches.length)];
+                    } else {
+                        updateProcessStatus(`نمایندگی در شهر "${targetCity.title}" یافت نشد. تلاش با شهری دیگر...`, true);
+                        await new Promise(resolve => setTimeout(resolve, 1500));
                     }
                 }
 
-                if (!targetCity) { // If no specific city OR specific city not found, pick a random one.
-                    targetCity = availableCities[Math.floor(Math.random() * availableCities.length)];
-                }
-
-                updateProcessStatus(`شهر "${targetCity.title}" انتخاب شد.`);
-
-                const requestDatacityBranch = { cityCode: targetCity.code, circulationId: result.id };
-                const branchResponse = await fetch(circilationbranchcityget, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestDatacityBranch) });
-                const branches = await branchResponse.json();
-
-                if (branches?.length) {
-                    selectedBranch = branches[Math.floor(Math.random() * branches.length)];
-                } else {
-                    updateProcessStatus(`نمایندگی در شهر "${targetCity.title}" یافت نشد. تلاش با شهری دیگر...`, true);
-                    await new Promise(resolve => setTimeout(resolve, 1500));
-                }
+                if (!selectedBranch?.code || !selectedBranch?.id) throw new Error("نمایندگی نامعتبر.");
+                updateProcessStatus(`نمایندگی "${selectedBranch.title}" انتخاب شد.`);
+                registercar(selectedBranch.code, selectedBranch.id, result.id, result.carUsages[0].id, checkedIds, result.circulationColors[0].colorCode, result.companyCode, result.crcl_row);
+                break; // Exit the while(true) loop on success
+            } catch (error) {
+                console.error('Fetch Data Error:', error);
+                updateProcessStatus(`خطا: ${error.message}. تلاش مجدد...`, true);
+                await new Promise(resolve => setTimeout(resolve, 3000)); // Wait before retrying the whole function
             }
-
-            if (!selectedBranch?.code || !selectedBranch?.id) throw new Error("نمایندگی نامعتبر.");
-            updateProcessStatus(`نمایندگی "${selectedBranch.title}" انتخاب شد.`);
-            registercar(selectedBranch.code, selectedBranch.id, result.id, result.carUsages[0].id, checkedIds, result.circulationColors[0].colorCode, result.companyCode, result.crcl_row);
-        } catch (error) {
-            console.error('Fetch Data Error:', error);
-            updateProcessStatus(`خطا: ${error.message}`, true);
         }
     }
 

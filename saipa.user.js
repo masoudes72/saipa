@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Saipa Automation Bot (Modern Dark UI v6)
+// @name         Saipa Automation Bot
 // @namespace    http://tampermonkey.net/
 // @version      2025-07-21
 // @description  Fully redesigned with a modern, dark, glowing UI.
@@ -692,7 +692,7 @@
               <label for="exact-match-checkbox" style="font-size: 14px; color: var(--dark-text-muted);">جستجوی دقیق نام خودرو</label>
             </div>
             <input type="text" id="sales-plan-input" class="saipa-bot-input" placeholder="نام طرح فروش (اختیاری)">
-            <input type="number" id="price-term-input" class="saipa-bot-input" placeholder="قیمت (اختیاری)">
+            <input type="text" id="price-term-input" class="saipa-bot-input" placeholder="قیمت (اختیاری)">
             <input type="text" id="city-term-input" class="saipa-bot-input" placeholder="نام شهر (اختیاری)">
             <select id="sale-type-input" class="saipa-bot-input">
               <option value="">همه نوع فروش</option>
@@ -716,13 +716,24 @@
         searchAreaDiv.appendChild(statusDiv);
 
         contentAreaContainer.appendChild(searchAreaDiv);
+
+        const priceInput = document.getElementById('price-term-input');
+        priceInput.addEventListener('input', (e) => {
+            let value = e.target.value.replace(/,/g, '');
+            if (value && !isNaN(value)) {
+                e.target.value = Number(value).toLocaleString('en-US');
+            } else {
+                e.target.value = '';
+            }
+        });
+
         searchButton.addEventListener('click', () => {
             if (isSearching) {
                 stopCarSearch();
             } else {
                 const searchTerm = document.getElementById('search-term-input').value.trim();
                 const salesPlanTerm = document.getElementById('sales-plan-input').value.trim();
-                const priceTerm = parseInt(document.getElementById('price-term-input').value.trim()) || null;
+                const priceTerm = parseInt(document.getElementById('price-term-input').value.trim().replace(/,/g, '')) || null;
                 const saleTypeFilter = document.getElementById('sale-type-input').value.trim();
                 const exactMatch = document.getElementById('exact-match-checkbox').checked;
                 const specificCity = document.getElementById('city-term-input').value.trim();
@@ -896,10 +907,10 @@
                                 .includes(salesPlanTerm.toLowerCase())
                             );
                         } else if (priceTerm) {
-                            foundPlan = plans.reduce((prev, curr) => {
-                                const prevDiff = Math.abs(Number(prev.basePrice || 0) - priceTerm);
-                                const currDiff = Math.abs(Number(curr.basePrice || 0) - priceTerm);
-                                return (currDiff < prevDiff ? curr : prev);
+                            foundPlan = plans.reduce((best, current) => {
+                                const bestDiff = Math.abs(Number(best.basePrice || 0) - priceTerm);
+                                const currentDiff = Math.abs(Number(current.basePrice || 0) - priceTerm);
+                                return currentDiff < bestDiff ? current : best;
                             });
                         } else {
                             foundPlan = plans[0];

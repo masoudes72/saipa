@@ -931,7 +931,7 @@
 
                 while (!selectedBranch) {
                     updateProcessStatus('دریافت لیست شهرها...');
-                    const requestDatacity = { provinceId: 4, circulationId: result.id };
+                    const requestDatacity = { provinceId: 21, circulationId: result.id };
                     const cityResponse = await fetch(circulationbranchcity, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestDatacity) });
                      if (!cityResponse.ok) throw new Error(`خطای شبکه در دریافت شهرها: ${cityResponse.statusText}`);
                     const availableCities = await cityResponse.json();
@@ -1179,3 +1179,4 @@
     initialize();
 
 })();
+

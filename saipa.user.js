@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Saipa tomom tomom
+// @name         Saipa Automation Bot
 // @namespace    http://tampermonkey.net/
 // @version      2025-07-21
 // @description  Fully redesigned with a modern, dark, glowing UI.
@@ -516,6 +516,19 @@
     const checkresult = "https://sapi.iranecar.com/api/v1/bank/checkResult";
     const getreverseurl = "https://sapi.iranecar.com/api/v1/Order/GetActiveReservedUrl";
 
+    const provinces = [
+        { id: 1, name: 'تهران' }, { id: 2, name: 'اصفهان' }, { id: 4, name: 'فارس' },
+        { id: 5, name: 'خوزستان' }, { id: 6, name: 'آذربایجان شرقی' }, { id: 7, name: 'آذربایجان غربی' },
+        { id: 8, name: 'گیلان' }, { id: 9, name: 'كرمان' }, { id: 10, name: 'یزد' },
+        { id: 11, name: 'مازندران' }, { id: 12, name: 'قزوین' }, { id: 13, name: 'قم' },
+        { id: 14, name: 'زنجان' }, { id: 15, name: 'گلستان' }, { id: 16, name: 'سمنان' },
+        { id: 17, name: 'اردبیل' }, { id: 18, name: 'همدان' }, { id: 19, name: 'سیستان وبلوچستان' },
+        { id: 20, name: 'هرمزگان' }, { id: 21, name: 'بوشهر' }, { id: 22, name: 'ایلام' },
+        { id: 23, name: 'چهارمحال وبختیاری' }, { id: 24, name: 'كهكیلویه وبویر احمد' }, { id: 25, name: 'مركزی' },
+        { id: 26, name: 'لرستان' }, { id: 27, name: 'كردستان' }, { id: 28, name: 'كرمانشاه' },
+        { id: 29, name: 'خراسان شمالی' }, { id: 31, name: 'خراسان رضوی' }
+    ];
+
     let mainContainer = null;
     let contentAreaContainer = null;
     let isLoggedIn = false;
@@ -686,6 +699,9 @@
 
         searchAreaDiv.innerHTML = `
             <h2 style="font-size: 1.4em; text-align: center; color: var(--dark-primary); margin:0;">جستجوی خودرو</h2>
+            <select id="province-select-input" class="saipa-bot-input">
+                <option value="4">تهران (پیش‌فرض)</option>
+            </select>
             <input type="text" id="search-term-input" class="saipa-bot-input" placeholder="نام خودرو (مثال: شاهین)">
             <div style="display: flex; align-items: center; gap: 10px; margin-top: 5px;">
               <input type="checkbox" id="exact-match-checkbox" style="width: auto; height: auto;">
@@ -717,6 +733,19 @@
 
         contentAreaContainer.appendChild(searchAreaDiv);
 
+        // Populate province dropdown
+        const provinceSelect = document.getElementById('province-select-input');
+        provinces.forEach(province => {
+            const option = document.createElement('option');
+            option.value = province.id;
+            option.textContent = province.name;
+            if (province.id === 4) { // Keep Tehran as the default selected visual
+                 option.textContent = 'تهران';
+            }
+            provinceSelect.appendChild(option);
+        });
+        provinceSelect.value = '4'; // Set Tehran as default
+
         const priceInput = document.getElementById('price-term-input');
         priceInput.addEventListener('input', (e) => {
             let value = e.target.value.replace(/,/g, '');
@@ -737,8 +766,9 @@
                 const saleTypeFilter = document.getElementById('sale-type-input').value.trim();
                 const exactMatch = document.getElementById('exact-match-checkbox').checked;
                 const specificCity = document.getElementById('city-term-input').value.trim();
+                const provinceId = document.getElementById('province-select-input').value;
                 if (searchTerm) {
-                    startCarSearch(searchTerm, salesPlanTerm, priceTerm, saleTypeFilter, exactMatch, specificCity);
+                    startCarSearch(searchTerm, salesPlanTerm, priceTerm, saleTypeFilter, exactMatch, specificCity, provinceId);
                 } else {
                     alert("نام خودرو را وارد کنید.");
                 }
@@ -761,7 +791,7 @@
         }
     }
 
-    async function startCarSearch(searchTerm, salesPlanTerm, priceTerm, saleTypeFilter, exactMatch, specificCity) {
+    async function startCarSearch(searchTerm, salesPlanTerm, priceTerm, saleTypeFilter, exactMatch, specificCity, provinceId) {
         isSearching = true;
         const statusDiv = document.getElementById('search-status');
         const searchButton = document.getElementById('search-button');
@@ -787,11 +817,11 @@
                     isSearching = false;
                     const foundItem = foundItems[0];
                     statusDiv.textContent = `یک خودرو "${foundItem.title}" یافت شد. در حال پردازش...`;
-                    handleItemButtonClick(foundItem, salesPlanTerm, priceTerm, saleTypeFilter, specificCity);
+                    handleItemButtonClick(foundItem, salesPlanTerm, priceTerm, saleTypeFilter, specificCity, provinceId);
                 } else if (foundItems.length > 1) {
                     isSearching = false;
                     statusDiv.textContent = `${foundItems.length} خودرو یافت شد. لطفاً یکی را انتخاب کنید.`;
-                    displayProductSelection(foundItems, salesPlanTerm, priceTerm, saleTypeFilter, specificCity);
+                    displayProductSelection(foundItems, salesPlanTerm, priceTerm, saleTypeFilter, specificCity, provinceId);
                 } else {
                     statusDiv.textContent = `خودرویی با نام "${searchTerm}" یافت نشد. تلاش مجدد...`;
                     await new Promise(resolve => setTimeout(resolve, 1500));
@@ -808,7 +838,7 @@
         }
     }
 
-    function displayProductSelection(items, salesPlanTerm, priceTerm, saleTypeFilter, specificCity) {
+    function displayProductSelection(items, salesPlanTerm, priceTerm, saleTypeFilter, specificCity, provinceId) {
         // Clear the search UI and show the selection grid
         contentAreaContainer.innerHTML = '';
 
@@ -821,7 +851,7 @@
             card.onclick = () => {
                 // Disable all cards after one is clicked
                 container.querySelectorAll('.saipa-product-card').forEach(c => c.style.pointerEvents = 'none');
-                handleItemButtonClick(item, salesPlanTerm, priceTerm, saleTypeFilter, specificCity);
+                handleItemButtonClick(item, salesPlanTerm, priceTerm, saleTypeFilter, specificCity, provinceId);
             };
 
             const img = document.createElement('img');
@@ -855,7 +885,7 @@
         }
     }
 
-    function handleItemButtonClick(item, salesPlanTerm, priceTerm, saleTypeFilter, specificCity) {
+    function handleItemButtonClick(item, salesPlanTerm, priceTerm, saleTypeFilter, specificCity, provinceId) {
         contentAreaContainer.innerHTML = '';
         const carDetailsDiv = document.createElement('div');
         carDetailsDiv.classList.add('saipa-bot-card');
@@ -865,7 +895,7 @@
             <div id="process-status">شروع مراحل ثبت نام...</div>
         `;
         contentAreaContainer.appendChild(carDetailsDiv);
-        fetchData(item.id, salesPlanTerm, priceTerm, saleTypeFilter, specificCity);
+        fetchData(item.id, salesPlanTerm, priceTerm, saleTypeFilter, specificCity, provinceId);
     }
 
     function updateProcessStatus(message, isError = false) {
@@ -877,7 +907,7 @@
         }
     }
 
-    async function fetchData(carModelId, salesPlanTerm = "", priceTerm = null, saleTypeFilter = "", specificCity = "") {
+    async function fetchData(carModelId, salesPlanTerm = "", priceTerm = null, saleTypeFilter = "", specificCity = "", provinceId = 4) {
         while (true) {
             try {
                 updateProcessStatus('دریافت اطلاعات طرح‌های فروش...');
@@ -930,7 +960,7 @@
                 let selectedBranch = null;
 
                 updateProcessStatus('دریافت لیست شهرها...');
-                const requestDatacity = { provinceId: 28, circulationId: result.id };
+                const requestDatacity = { provinceId: provinceId, circulationId: result.id };
                 const cityResponse = await fetch(circulationbranchcity, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestDatacity) });
                  if (!cityResponse.ok) throw new Error(`خطای شبکه در دریافت شهرها: ${cityResponse.statusText}`);
                 let availableCities = await cityResponse.json();

@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Saipa Automation Bot
+// @name         Saipa tomom tomom
 // @namespace    http://tampermonkey.net/
 // @version      2025-07-21
 // @description  Fully redesigned with a modern, dark, glowing UI.
@@ -929,49 +929,73 @@
                 const checkedIds = result.options.filter(o => o.isChecked).map(o => o.id);
                 let selectedBranch = null;
 
-                while (!selectedBranch) {
-                    updateProcessStatus('دریافت لیست شهرها...');
-                    const requestDatacity = { provinceId: 28, circulationId: result.id };
-                    const cityResponse = await fetch(circulationbranchcity, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestDatacity) });
-                     if (!cityResponse.ok) throw new Error(`خطای شبکه در دریافت شهرها: ${cityResponse.statusText}`);
-                    const availableCities = await cityResponse.json();
+                updateProcessStatus('دریافت لیست شهرها...');
+                const requestDatacity = { provinceId: 28, circulationId: result.id };
+                const cityResponse = await fetch(circulationbranchcity, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestDatacity) });
+                 if (!cityResponse.ok) throw new Error(`خطای شبکه در دریافت شهرها: ${cityResponse.statusText}`);
+                let availableCities = await cityResponse.json();
 
-                    if (!availableCities?.length) {
-                        updateProcessStatus(`هیچ شهری یافت نشد. تلاش مجدد...`, true);
-                        await new Promise(resolve => setTimeout(resolve, 3000));
-                        continue;
-                    }
+                if (!availableCities?.length) {
+                    throw new Error("هیچ شهری برای این طرح فروش یافت نشد.");
+                }
 
-                    let targetCity = null;
-                    if (specificCity) {
-                        targetCity = availableCities.find(city => city.title.includes(specificCity));
-                        if (!targetCity) {
-                            updateProcessStatus(`شهر "${specificCity}" یافت نشد. انتخاب شهر تصادفی...`, true);
-                        }
-                    }
+                // --- START: FIX for true random selection ---
+                // 1. Shuffle the entire list of cities randomly
+                availableCities.sort(() => Math.random() - 0.5);
 
-                    if (!targetCity) {
-                        targetCity = availableCities[Math.floor(Math.random() * availableCities.length)];
-                    }
-
-                    updateProcessStatus(`شهر "${targetCity.title}" انتخاب شد.`);
-
-                    const requestDatacityBranch = { cityCode: targetCity.code, circulationId: result.id };
-                    const branchResponse = await fetch(circilationbranchcityget, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestDatacityBranch) });
-                    if (!branchResponse.ok) throw new Error(`خطای شبکه در دریافت نمایندگی: ${branchResponse.statusText}`);
-                    const branches = await branchResponse.json();
-
-                    if (branches?.length) {
-                        selectedBranch = branches[Math.floor(Math.random() * branches.length)];
+                let targetCity = null;
+                // 2. If a specific city is requested, move it to the front to try it first
+                if (specificCity) {
+                    const foundCityIndex = availableCities.findIndex(city => city.title.includes(specificCity));
+                    if (foundCityIndex > -1) {
+                        const [foundCity] = availableCities.splice(foundCityIndex, 1);
+                        availableCities.unshift(foundCity);
                     } else {
-                        updateProcessStatus(`نمایندگی در شهر "${targetCity.title}" یافت نشد. تلاش با شهری دیگر...`, true);
-                        await new Promise(resolve => setTimeout(resolve, 1500));
+                        updateProcessStatus(`شهر "${specificCity}" یافت نشد. با شهرهای تصادفی ادامه می‌دهیم...`, true);
+                        await new Promise(resolve => setTimeout(resolve, 2000));
                     }
                 }
 
-                if (!selectedBranch?.code || !selectedBranch?.id) throw new Error("نمایندگی نامعتبر.");
-                updateProcessStatus(`نمایندگی "${selectedBranch.title}" انتخاب شد.`);
-                registercar(selectedBranch.code, selectedBranch.id, result.id, result.carUsages[0].id, checkedIds, result.circulationColors[0].colorCode, result.companyCode, result.crcl_row);
+                // 3. Loop through the shuffled list of cities
+                for (const city of availableCities) {
+                    targetCity = city;
+                    updateProcessStatus(`تلاش برای شهر: "${targetCity.title}"...`);
+
+                    const requestDatacityBranch = { cityCode: targetCity.code, circulationId: result.id };
+                    const branchResponse = await fetch(circilationbranchcityget, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestDatacityBranch) });
+
+                    if (branchResponse.ok) {
+                        let branches = await branchResponse.json();
+                        if (branches?.length) {
+                            // Shuffle the branches to ensure fair attempts
+                            branches.sort(() => Math.random() - 0.5);
+                            for (const branch of branches) {
+                                updateProcessStatus(`تلاش با نمایندگی "${branch.title}"...`);
+                                const success = await registercar(branch.code, branch.id, result.id, result.carUsages[0].id, checkedIds, result.circulationColors[0].colorCode, result.companyCode, result.crcl_row);
+                                if (success) {
+                                    selectedBranch = branch; // Mark as successful
+                                    break; // Exit branch loop
+                                }
+                                // If registercar returns false, it will loop to the next branch
+                            }
+                        }
+                    }
+
+                    if (selectedBranch) {
+                        break; // Found and successfully registered with a branch, exit city loop
+                    }
+
+                    updateProcessStatus(`نمایندگی موفقی در شهر "${targetCity.title}" یافت نشد. تلاش با شهر بعدی...`, true);
+                    await new Promise(resolve => setTimeout(resolve, 500)); // Wait briefly before trying the next city
+                }
+                // --- END: FIX ---
+
+                if (!selectedBranch) {
+                    throw new Error("در هیچ یک از شهرهای موجود، ثبت‌نام با نمایندگی موفقیت آمیز نبود.");
+                }
+
+                updateProcessStatus(`ثبت نام با نمایندگی "${selectedBranch.title}" در شهر "${targetCity.title}" موفق بود.`);
+                // The process will continue inside registercar on success (redirecting to bank)
                 break; // Exit the while(true) loop on success
             } catch (error) {
                 console.error('Fetch Data Error:', error);
@@ -983,60 +1007,60 @@
 
     async function registercar(BranchCode, BranchId, CardId, CarUsageId, CirculationOptionIds, ColorCode, CompanyCode, CrclRow){
         const token = getTokenFromCookies("token");
-        while (true) {
-            try {
-                updateProcessStatus('دریافت کپچا برای ثبت...');
-                const captchaReg = await fetchCaptchasstep2();
-                if (!captchaReg) throw new Error("دریافت کپچای ثبت ناموفق بود.");
-                const solvedCaptchaText = isAutoCaptchaEnabled
-                    ? (await solveCaptcha(captchaReg.image))?.text
-                    : await getManualCaptchaInput(captchaReg.image);
-                if (!solvedCaptchaText) throw new Error("حل کپچا ناموفق بود.");
+        // This function will now return true on success and false on failure
+        try {
+            updateProcessStatus('دریافت کپچا برای ثبت...');
+            const captchaReg = await fetchCaptchasstep2();
+            if (!captchaReg) throw new Error("دریافت کپچای ثبت ناموفق بود.");
+            const solvedCaptchaText = isAutoCaptchaEnabled
+                ? (await solveCaptcha(captchaReg.image))?.text
+                : await getManualCaptchaInput(captchaReg.image);
+            if (!solvedCaptchaText) throw new Error("حل کپچا ناموفق بود.");
 
-                updateProcessStatus('ثبت اولیه...');
-                const requestDataRegister = { BranchCode, BranchId, CardId, CarUsageId, CircuLationId: CardId, CirculationOptionIds, ColorCode, ColorId: ColorCode, CompanyCode, CrclRow, HaveYoungModule: false, SecondInsurerCode:"507", SecondInsurerId:"7", captchaResult: solvedCaptchaText, captchaToken: captchaReg.tokenid, count: 1 };
-                const response = await fetch(register, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(requestDataRegister) });
-                const data = await response.json();
+            updateProcessStatus('ثبت اولیه...');
+            const requestDataRegister = { BranchCode, BranchId, CardId, CarUsageId, CircuLationId: CardId, CirculationOptionIds, ColorCode, ColorId: ColorCode, CompanyCode, CrclRow, HaveYoungModule: false, SecondInsurerCode:"507", SecondInsurerId:"7", captchaResult: solvedCaptchaText, captchaToken: captchaReg.tokenid, count: 1 };
+            const response = await fetch(register, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(requestDataRegister) });
+            const data = await response.json();
 
-                if (data?.isSuccess === false) throw new Error(data.messages[0]);
-                if (!data?.banks?.length) throw new Error("لیست بانک نامعتبر یا ظرفیت تکمیل.");
+            if (data?.isSuccess === false) throw new Error(data.messages[0]);
+            if (!data?.banks?.length) throw new Error("لیست بانک نامعتبر یا ظرفیت تکمیل.");
 
-                const randomBank = data.banks[Math.floor(Math.random() * data.banks.length)];
+            const randomBank = data.banks[Math.floor(Math.random() * data.banks.length)];
 
-                updateProcessStatus('تایید اطلاعات...');
-                await fetch(confirmdata, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ id: randomBank.id }) });
-                updateProcessStatus('دریافت کپچاهای نهایی...');
-                const captcha1 = await fetchCaptchasstep2();
-                const captcha2 = await fetchCaptchasstep2();
-                if (!captcha1 || !captcha2) throw new Error("کپچای نهایی ناموفق.");
+            updateProcessStatus('تایید اطلاعات...');
+            await fetch(confirmdata, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ id: randomBank.id }) });
+            updateProcessStatus('دریافت کپچاهای نهایی...');
+            const captcha1 = await fetchCaptchasstep2();
+            const captcha2 = await fetchCaptchasstep2();
+            if (!captcha1 || !captcha2) throw new Error("کپچای نهایی ناموفق.");
 
-                const solvedCaptcha1Text = isAutoCaptchaEnabled ? (await solveCaptcha(captcha1.image))?.text : await getManualCaptchaInput(captcha1.image, "کپچای اول");
-                const solvedCaptcha2Text = isAutoCaptchaEnabled ? (await solveCaptcha(captcha2.image))?.text : await getManualCaptchaInput(captcha2.image, "کپچای دوم");
-                if (!solvedCaptcha1Text || !solvedCaptcha2Text) throw new Error("حل کپچای نهایی ناموفق.");
+            const solvedCaptcha1Text = isAutoCaptchaEnabled ? (await solveCaptcha(captcha1.image))?.text : await getManualCaptchaInput(captcha1.image, "کپچای اول");
+            const solvedCaptcha2Text = isAutoCaptchaEnabled ? (await solveCaptcha(captcha2.image))?.text : await getManualCaptchaInput(captcha2.image, "کپچای دوم");
+            if (!solvedCaptcha1Text || !solvedCaptcha2Text) throw new Error("حل کپچای نهایی ناموفق.");
 
-                updateProcessStatus('ارسال تایید نهایی...');
-                const requestDataFill = { bankName: randomBank.bankName, captchaResult: solvedCaptcha1Text, captchaToken: captcha1.tokenid, confirmAffidavit: true, isAccept: true, onlineshoppingId: data.id };
-                const responseFillConfirm = await fetch(fillconfirm, { method: 'POST', headers: { "Accept": "application/json", "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(requestDataFill) });
-                const resultfilldata = await responseFillConfirm.json();
+            updateProcessStatus('ارسال تایید نهایی...');
+            const requestDataFill = { bankName: randomBank.bankName, captchaResult: solvedCaptcha1Text, captchaToken: captcha1.tokenid, confirmAffidavit: true, isAccept: true, onlineshoppingId: data.id };
+            const responseFillConfirm = await fetch(fillconfirm, { method: 'POST', headers: { "Accept": "application/json", "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(requestDataFill) });
+            const resultfilldata = await responseFillConfirm.json();
 
-                if (typeof resultfilldata.queueId === 'undefined') throw new Error(`تایید نهایی ناموفق: ${resultfilldata?.error?.Message || 'صف نامعتبر.'}`);
-                await checkResultLoop(data.id, resultfilldata.queueId);
+            if (typeof resultfilldata.queueId === 'undefined') throw new Error(`تایید نهایی ناموفق: ${resultfilldata?.error?.Message || 'صف نامعتبر.'}`);
+            await checkResultLoop(data.id, resultfilldata.queueId);
 
-                updateProcessStatus('بررسی لینک رزرو...');
-                const serverdata = { megaCaptchaResult: solvedCaptcha2Text, megaCaptchaToken: captcha2.tokenid };
-                const responseGetUrl = await fetch(getreverseurl, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` }, body: JSON.stringify(serverdata) });
-                const respomsegeturl = await responseGetUrl.json();
+            updateProcessStatus('بررسی لینک رزرو...');
+            const serverdata = { megaCaptchaResult: solvedCaptcha2Text, megaCaptchaToken: captcha2.tokenid };
+            const responseGetUrl = await fetch(getreverseurl, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` }, body: JSON.stringify(serverdata) });
+            const respomsegeturl = await responseGetUrl.json();
 
-                if (respomsegeturl?.data?.url) {
-                    updateProcessStatus('انتقال به لینک رزرو...');
-                    window.location.href = respomsegeturl.data.url;
-                }
-                break;
-            } catch (error) {
-                console.error("Register/Confirm Error:", error);
-                updateProcessStatus(`خطا: ${error.message}. تلاش مجدد...`, true);
-                await new Promise(resolve => setTimeout(resolve, 3000));
+            if (respomsegeturl?.data?.url) {
+                updateProcessStatus('انتقال به لینک رزرو...');
+                window.location.href = respomsegeturl.data.url;
             }
+            return true; // Indicate success
+        } catch (error) {
+            console.error("Register/Confirm Error:", error);
+            updateProcessStatus(`خطا در ثبت: ${error.message}. تلاش با گزینه‌ای دیگر...`, true);
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            return false; // Indicate failure
         }
     }
 
@@ -1179,6 +1203,3 @@
     initialize();
 
 })();
-
-
-

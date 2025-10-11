@@ -971,19 +971,34 @@
 
                 // --- START: FIX for true random selection ---
                 // 1. Shuffle the entire list of cities randomly
+                // (and then apply normalization-based filter if specificCity provided)
+                // ✅ تابع نرمال‌سازی فارسی/عربی (افزودن کامل برای جلوگیری از مشکل 'ك'/'ک' و 'ي'/'ی' و نیم‌فاصله)
+                function normalizePersian(str) {
+                    if (!str) return "";
+                    return str
+                        .replace(/ي/g, 'ی')       // Arabic Yeh → Persian Yeh
+                        .replace(/ك/g, 'ک')       // Arabic Kaf → Persian Kaf
+                        .replace(/ؤ/g, 'و')       // Waw with Hamza → Waw
+                        .replace(/[أإآ]/g, 'ا')   // Alef variants → Alef
+                        .replace(/ۀ/g, 'ه')       // Heh with Yeh → Heh
+                        .replace(/ة/g, 'ه')       // Ta marbuta → Heh
+                        .replace(/\u200c/g, ' ')  // ZWNJ (نیم‌فاصله) → normal space
+                        .replace(/\s+/g, ' ')     // collapse multiple spaces
+                        .trim();
+                }
+
                 availableCities.sort(() => Math.random() - 0.5);
 
                 let targetCity = null;
-                // 2. If a specific city is requested, move it to the front to try it first
-                // ✅ نسخه جدید برای پشتیبانی از چند شهر
+                // 2. If a specific city is requested, filter by normalized names (support multiple cities separated by ، or ,)
                 if (specificCity) {
                     // تبدیل ورودی به آرایه از نام شهرها، مثل "مشهد، سبزوار، نیشابور"
-                    const cityNames = specificCity.split(/[،,]/).map(s => s.trim()).filter(Boolean);
+                    const cityNames = specificCity.split(/[،,]/).map(s => normalizePersian(s)).filter(Boolean);
 
-                    // فقط شهرهایی را نگه می‌داریم که نام‌شان شامل یکی از شهرهای لیست است
+                    // فقط شهرهایی را نگه می‌داریم که نام‌شان پس از نرمال‌سازی شامل یکی از نام‌های ورودی باشد
                     const filteredCities = availableCities.filter(city =>
-                                                                  cityNames.some(name => city.title.includes(name))
-                                                                 );
+                        cityNames.some(name => normalizePersian(city.title).includes(name))
+                    );
 
                     if (filteredCities.length > 0) {
                         availableCities = filteredCities; // فقط همین شهرها باقی بمانند

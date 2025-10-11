@@ -2,8 +2,8 @@
 // @name         Saipa Automation Bot
 // @namespace    http://tampermonkey.net/
 // @version      2025-07-21
-// @description  Fully redesigned with a modern, dark, glowing UI.
-// @author       You (Redesigned by Gemini)
+// @description  bot
+// @author       masoud
 // @match        *://saipa.iranecar.com/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
@@ -739,12 +739,9 @@
             const option = document.createElement('option');
             option.value = province.id;
             option.textContent = province.name;
-            if (province.id === 4) { // Keep Tehran as the default selected visual
-                 option.textContent = 'تهران';
-            }
             provinceSelect.appendChild(option);
         });
-        provinceSelect.value = '4'; // Set Tehran as default
+        
 
         const priceInput = document.getElementById('price-term-input');
         priceInput.addEventListener('input', (e) => {

@@ -975,16 +975,28 @@
 
                 let targetCity = null;
                 // 2. If a specific city is requested, move it to the front to try it first
+                // ✅ نسخه جدید برای پشتیبانی از چند شهر
                 if (specificCity) {
-                    const foundCityIndex = availableCities.findIndex(city => city.title.includes(specificCity));
-                    if (foundCityIndex > -1) {
-                        const [foundCity] = availableCities.splice(foundCityIndex, 1);
-                        availableCities.unshift(foundCity);
+                    // تبدیل ورودی به آرایه از نام شهرها، مثل "مشهد، سبزوار، نیشابور"
+                    const cityNames = specificCity.split(/[،,]/).map(s => s.trim()).filter(Boolean);
+
+                    // فقط شهرهایی را نگه می‌داریم که نام‌شان شامل یکی از شهرهای لیست است
+                    const filteredCities = availableCities.filter(city =>
+                                                                  cityNames.some(name => city.title.includes(name))
+                                                                 );
+
+                    if (filteredCities.length > 0) {
+                        availableCities = filteredCities; // فقط همین شهرها باقی بمانند
+                        updateProcessStatus(`فقط شهرهای ${cityNames.join('، ')} انتخاب شدند.`);
                     } else {
-                        updateProcessStatus(`شهر "${specificCity}" یافت نشد. با شهرهای تصادفی ادامه می‌دهیم...`, true);
-                        await new Promise(resolve => setTimeout(resolve, 2000));
+                        updateProcessStatus(`هیچ یک از شهرهای ${cityNames.join('، ')} یافت نشد. عملیات متوقف شد.`, true);
+                        return; // چون هیچ شهر مجازی پیدا نشده، کل عملیات ثبت را متوقف کن
                     }
+                } else {
+                    // در حالت بدون ورودی، به صورت تصادفی کل شهرها را shuffle کن
+                    availableCities.sort(() => Math.random() - 0.5);
                 }
+
 
                 // 3. Loop through the shuffled list of cities
                 for (const city of availableCities) {

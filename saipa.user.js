@@ -401,6 +401,87 @@
     document.head.appendChild(styleSheet);
     // --- End of Styles ---
 
+    // ===== Live Console Styles (string only; injected on init) =====
+    const liveConsoleStyles = `
+.saipa-live-console {
+  position: fixed; bottom: 16px; right: 16px;
+  width: 360px; max-height: 60vh;
+  background: rgba(18,18,24,0.95);
+  color: #f2f2f2; border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.05);
+  box-shadow: 0 4px 25px rgba(0,0,0,0.5);
+  z-index: 99999; display: flex; flex-direction: column;
+  font-family: 'Vazirmatn', sans-serif;
+  transition: all 0.3s ease;
+}
+/* Embedded mode inside panel */
+.saipa-live-console.embedded {
+  position: static; right: auto; bottom: auto; width: 100%; max-height: 260px;
+  background: var(--dark-surface); color: var(--dark-text);
+  border: 1px solid var(--dark-border); box-shadow: none; margin-top: 8px;
+}
+.saipa-live-console .lc-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 12px; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.saipa-live-console.embedded .lc-header { border-bottom: 1px solid var(--dark-border); }
+.saipa-live-console .lc-body { display:flex; gap:8px; padding:10px; flex-wrap:wrap; }
+.saipa-live-console .lc-field { flex: 1 1 48%; font-size: 12px; }
+.saipa-live-console .lc-field .label { color:#aaa; font-size:11px; }
+.saipa-live-console.embedded .lc-field .label { color: var(--dark-text-muted); }
+.saipa-live-console .lc-field .value {
+  background: rgba(255,255,255,0.05); padding:5px 6px;
+  border-radius:6px; font-weight:600;
+}
+.saipa-live-console.embedded .lc-field .value { background: var(--dark-bg); }
+.saipa-live-console .lc-logs {
+  max-height: 160px; overflow:auto;
+  background: rgba(0,0,0,0.2); padding:8px; border-radius:8px; font-size:11px;
+}
+.saipa-live-console.embedded .lc-logs { background: rgba(0,0,0,0.15); }
+.lc-log-item { margin-bottom:4px; color:#d0d0d0; }
+.saipa-live-console.embedded .lc-log-item { color: var(--dark-text); opacity: 0.85; }
+.lc-log-item .time { color:#9aa0b4; margin-right:4px; }
+.saipa-live-console.embedded .lc-log-item .time { color: var(--dark-text-muted); }
+
+.saipa-live-console.collapsed { width: 50px; height: 50px; overflow:hidden; }
+.saipa-live-console.collapsed .lc-body, .saipa-live-console.collapsed .lc-logs { display:none; }
+/* Embedded collapsed should not shrink */
+.saipa-live-console.embedded.collapsed { width: 100%; height: auto; overflow: visible; }
+
+@media (max-width: 600px) {
+  .saipa-live-console {
+    width: calc(100vw - 20px);
+    right: 10px; bottom: 10px;
+    max-height: 40vh;
+    font-size: 11px;
+  }
+  .saipa-live-console .lc-body { flex-direction: column; }
+  .saipa-live-console.embedded { max-height: 40vh; }
+}
+`;
+
+    // Bank link toast styles (fade-in + responsive)
+    const bankLinkStyles = `
+.saipa-bank-link-toast {
+  position: absolute; right: 12px; bottom: 12px;
+  background: rgba(18,18,24,0.95);
+  color: #f2f2f2; border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  padding: 12px 14px; z-index: 10002;
+  max-width: calc(100% - 24px);
+  opacity: 0; transform: translateY(10px);
+  animation: bankFadeIn 0.35s ease forwards;
+}
+.saipa-bank-link-toast .title { font-weight: 700; color: #8C67FF; margin-bottom: 8px; }
+.saipa-bank-link-toast a { color: #00e676; text-decoration: underline; word-break: break-all; }
+@keyframes bankFadeIn { to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 600px) {
+  .saipa-bank-link-toast { left: 12px; right: 12px; width: auto; }
+}
+`;
+
 
     // ****** HELPER FUNCTIONS FOR HEADER ******
     function getCookieValue(name) {
@@ -1185,8 +1266,16 @@
             searchButton.querySelector('strong').textContent = 'لغو جستجو';
         }
 
+        // Update province name in console at start
+        try {
+            const provObj = provinces.find(p => String(p.id) === String(provinceId));
+            const provinceName = provObj ? provObj.name : String(provinceId || '');
+            if (provinceName) updateLiveConsole({ province: provinceName });
+        } catch (e) {}
+
         while (isSearching) {
             statusDiv.textContent = `جستجو برای "${searchTerm}"...`;
+            updateLiveConsole({ status: `جستجو برای "${searchTerm}"` }, `شروع جستجو برای "${searchTerm}"`);
             const items = await fetchItemsData();
 
             if (!isSearching) break; // If search was cancelled, exit loop
@@ -1197,22 +1286,27 @@
                     const term = searchTerm.toLowerCase();
                     return exactMatch ? title === term : title.includes(term);
                 });
+                updateLiveConsole({}, `یافت شده: ${foundItems.length} مورد برای "${searchTerm}"`);
 
                 if (foundItems.length === 1) {
                     isSearching = false;
                     const foundItem = foundItems[0];
                     statusDiv.textContent = `یک خودرو "${foundItem.title}" یافت شد. در حال پردازش...`;
+                    updateLiveConsole({ car: foundItem.title, status: 'خودرو انتخاب شد' }, `خودرو انتخاب شد: ${foundItem.title}`);
                     handleItemButtonClick(foundItem, salesPlanTerm, priceTerm, saleTypeFilter, specificCity, provinceId);
                 } else if (foundItems.length > 1) {
                     isSearching = false;
                     statusDiv.textContent = `${foundItems.length} خودرو یافت شد. لطفاً یکی را انتخاب کنید.`;
+                    updateLiveConsole({ status: 'چند خودرو یافت شد' }, `${foundItems.length} خودرو یافت شد`);
                     displayProductSelection(foundItems, salesPlanTerm, priceTerm, saleTypeFilter, specificCity, provinceId);
                 } else {
                     statusDiv.textContent = `خودرویی با نام "${searchTerm}" یافت نشد. تلاش مجدد...`;
+                    updateLiveConsole({}, `عدم نتیجه برای "${searchTerm}", تلاش مجدد...`);
                     await new Promise(resolve => setTimeout(resolve, 1500));
                 }
             } else {
                 statusDiv.textContent = "خطا در دریافت لیست خودروها. تلاش مجدد...";
+                updateLiveConsole({ status: 'خطای API لیست خودرو' }, 'خطا در دریافت لیست خودروها');
                 await new Promise(resolve => setTimeout(resolve, 5000)); // Wait longer on API error
             }
         }
@@ -1280,6 +1374,7 @@
             <div id="process-status">شروع مراحل ثبت نام...</div>
         `;
         contentAreaContainer.appendChild(carDetailsDiv);
+        updateLiveConsole({ car: item.title, status: 'شروع فرآیند ثبت' }, `شروع فرآیند ثبت برای ${item.title}`);
         fetchData(item.id, salesPlanTerm, priceTerm, saleTypeFilter, specificCity, provinceId);
     }
 
@@ -1296,6 +1391,13 @@
         while (true) {
             try {
                 updateProcessStatus('دریافت اطلاعات طرح‌های فروش...');
+                // Province name update if available
+                try {
+                    const provObj = provinces.find(p => String(p.id) === String(provinceId));
+                    const provinceName = provObj ? provObj.name : String(provinceId || '');
+                    if (provinceName) updateLiveConsole({ province: provinceName });
+                } catch (e) {}
+                updateLiveConsole({ status: 'دریافت طرح‌های فروش' }, 'در حال دریافت طرح‌های فروش');
                 let result = null;
                 while (result === null) {
                     const url = `${circulationApiUrl}?carModelId=${carModelId}`;
@@ -1305,6 +1407,7 @@
 
                     if (!data?.data?.length) {
                         updateProcessStatus("هیچ طرح فعالی یافت نشد. تلاش مجدد...", true);
+                        updateLiveConsole({ status: 'طرح فعال یافت نشد' }, 'طرح فعال یافت نشد، تلاش مجدد');
                         await new Promise(resolve => setTimeout(resolve, 5000));
                         continue;
                     }
@@ -1334,9 +1437,14 @@
 
                     if (foundPlan) {
                         updateProcessStatus(`طرح "${foundPlan.title}" با قیمت ${foundPlan.basePrice} انتخاب شد.`);
+                        const formattedPrice = (foundPlan.basePrice !== undefined && foundPlan.basePrice !== null)
+                            ? Number(foundPlan.basePrice).toLocaleString('fa-IR')
+                            : '';
+                        updateLiveConsole({ plan: foundPlan.title, price: formattedPrice, status: `طرح انتخاب شد: ${foundPlan.title}` }, `طرح انتخاب شد: ${foundPlan.title} | قیمت: ${formattedPrice}`);
                         result = foundPlan;
                     } else {
                         updateProcessStatus(`طرح "${salesPlanTerm || 'مناسب'}" یافت نشد. تلاش مجدد...`, true);
+                        updateLiveConsole({}, `طرح موردنظر یافت نشد، تلاش مجدد...`);
                         await new Promise(resolve => setTimeout(resolve, 3000));
                     }
                 }
@@ -1345,6 +1453,7 @@
                 let selectedBranch = null;
 
                 updateProcessStatus('دریافت لیست شهرها...');
+                updateLiveConsole({ status: 'دریافت شهرها' }, 'در حال دریافت شهرها');
                 const requestDatacity = { provinceId: provinceId, circulationId: result.id };
                 const cityResponse = await fetch(circulationbranchcity, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestDatacity) });
                  if (!cityResponse.ok) throw new Error(`خطای شبکه در دریافت شهرها: ${cityResponse.statusText}`);
@@ -1354,54 +1463,47 @@
                     throw new Error("هیچ شهری برای این طرح فروش یافت نشد.");
                 }
 
-                // --- START: FIX for true random selection ---
-                // 1. Shuffle the entire list of cities randomly
-                // (and then apply normalization-based filter if specificCity provided)
-                // ✅ تابع نرمال‌سازی فارسی/عربی (افزودن کامل برای جلوگیری از مشکل 'ك'/'ک' و 'ي'/'ی' و نیم‌فاصله)
                 function normalizePersian(str) {
                     if (!str) return "";
                     return str
-                        .replace(/ي/g, 'ی')       // Arabic Yeh → Persian Yeh
-                        .replace(/ك/g, 'ک')       // Arabic Kaf → Persian Kaf
-                        .replace(/ؤ/g, 'و')       // Waw with Hamza → Waw
-                        .replace(/[أإآ]/g, 'ا')   // Alef variants → Alef
-                        .replace(/ۀ/g, 'ه')       // Heh with Yeh → Heh
-                        .replace(/ة/g, 'ه')       // Ta marbuta → Heh
-                        .replace(/\u200c/g, ' ')  // ZWNJ (نیم‌فاصله) → normal space
-                        .replace(/\s+/g, ' ')     // collapse multiple spaces
+                        .replace(/ي/g, 'ی')
+                        .replace(/ك/g, 'ک')
+                        .replace(/ؤ/g, 'و')
+                        .replace(/[أإآ]/g, 'ا')
+                        .replace(/ۀ/g, 'ه')
+                        .replace(/ة/g, 'ه')
+                        .replace(/\u200c/g, ' ')
+                        .replace(/\s+/g, ' ')
                         .trim();
                 }
 
                 availableCities.sort(() => Math.random() - 0.5);
 
                 let targetCity = null;
-                // 2. If a specific city is requested, filter by normalized names (support multiple cities separated by ، or ,)
                 if (specificCity) {
-                    // تبدیل ورودی به آرایه از نام شهرها، مثل "مشهد، سبزوار، نیشابور"
                     const cityNames = specificCity.split(/[،,]/).map(s => normalizePersian(s)).filter(Boolean);
 
-                    // فقط شهرهایی را نگه می‌داریم که نام‌شان پس از نرمال‌سازی شامل یکی از نام‌های ورودی باشد
                     const filteredCities = availableCities.filter(city =>
                         cityNames.some(name => normalizePersian(city.title).includes(name))
                     );
 
                     if (filteredCities.length > 0) {
-                        availableCities = filteredCities; // فقط همین شهرها باقی بمانند
+                        availableCities = filteredCities;
                         updateProcessStatus(`فقط شهرهای ${cityNames.join('، ')} انتخاب شدند.`);
+                        updateLiveConsole({ city: cityNames.join('، ') }, `فیلتر شهر: ${cityNames.join('، ')}`);
                     } else {
                         updateProcessStatus(`هیچ یک از شهرهای ${cityNames.join('، ')} یافت نشد. عملیات متوقف شد.`, true);
-                        return; // چون هیچ شهر مجازی پیدا نشده، کل عملیات ثبت را متوقف کن
+                        updateLiveConsole({ status: 'شهر معتبر یافت نشد' }, 'هیچ شهر معتبری یافت نشد');
+                        return;
                     }
                 } else {
-                    // در حالت بدون ورودی، به صورت تصادفی کل شهرها را shuffle کن
                     availableCities.sort(() => Math.random() - 0.5);
                 }
 
-
-                // 3. Loop through the shuffled list of cities
                 for (const city of availableCities) {
                     targetCity = city;
                     updateProcessStatus(`تلاش برای شهر: "${targetCity.title}"...`);
+                    updateLiveConsole({ city: targetCity.title, status: `تلاش در شهر ${targetCity.title}` }, `تلاش برای شهر: ${targetCity.title}`);
 
                     const requestDatacityBranch = { cityCode: targetCity.code, circulationId: result.id };
                     const branchResponse = await fetch(circilationbranchcityget, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestDatacityBranch) });
@@ -1409,40 +1511,40 @@
                     if (branchResponse.ok) {
                         let branches = await branchResponse.json();
                         if (branches?.length) {
-                            // Shuffle the branches to ensure fair attempts
                             branches.sort(() => Math.random() - 0.5);
                             for (const branch of branches) {
                                 updateProcessStatus(`تلاش با نمایندگی "${branch.title}"...`);
+                                updateLiveConsole({ branch: branch.title }, `تلاش با نمایندگی: ${branch.title}`);
                                 const success = await registercar(branch.code, branch.id, result.id, result.carUsages[0].id, checkedIds, result.circulationColors[0].colorCode, result.companyCode, result.crcl_row);
                                 if (success) {
-                                    selectedBranch = branch; // Mark as successful
-                                    break; // Exit branch loop
+                                    selectedBranch = branch;
+                                    break;
                                 }
-                                // If registercar returns false, it will loop to the next branch
                             }
                         }
                     }
 
                     if (selectedBranch) {
-                        break; // Found and successfully registered with a branch, exit city loop
+                        break;
                     }
 
                     updateProcessStatus(`نمایندگی موفقی در شهر "${targetCity.title}" یافت نشد. تلاش با شهر بعدی...`, true);
-                    await new Promise(resolve => setTimeout(resolve, 500)); // Wait briefly before trying the next city
+                    updateLiveConsole({}, `نمایندگی موفقی در ${targetCity.title} یافت نشد`);
+                    await new Promise(resolve => setTimeout(resolve, 500));
                 }
-                // --- END: FIX ---
 
                 if (!selectedBranch) {
                     throw new Error("در هیچ یک از شهرهای موجود، ثبت‌نام با نمایندگی موفقیت آمیز نبود.");
                 }
 
                 updateProcessStatus(`ثبت نام با نمایندگی "${selectedBranch.title}" در شهر "${targetCity.title}" موفق بود.`);
-                // The process will continue inside registercar on success (redirecting to bank)
+                updateLiveConsole({ status: `ثبت نام موفق در ${selectedBranch.title}` }, `ثبت نام موفق در نمایندگی ${selectedBranch.title}`);
                 break; // Exit the while(true) loop on success
             } catch (error) {
                 console.error('Fetch Data Error:', error);
                 updateProcessStatus(`خطا: ${error.message}. تلاش مجدد...`, true);
-                await new Promise(resolve => setTimeout(resolve, 3000)); // Wait before retrying the whole function
+                updateLiveConsole({ status: 'خطا در فرآیند' }, `خطا: ${error.message}`);
+                await new Promise(resolve => setTimeout(resolve, 3000));
             }
         }
     }
@@ -1452,6 +1554,7 @@
         // This function will now return true on success and false on failure
         try {
             updateProcessStatus('دریافت کپچا برای ثبت...');
+            appendConsoleLog('دریافت کپچای ثبت');
             const captchaReg = await fetchCaptchasstep2();
             if (!captchaReg) throw new Error("دریافت کپچای ثبت ناموفق بود.");
             const solvedCaptchaText = isAutoCaptchaEnabled
@@ -1460,6 +1563,7 @@
             if (!solvedCaptchaText) throw new Error("حل کپچا ناموفق بود.");
 
             updateProcessStatus('ثبت اولیه...');
+            appendConsoleLog('ثبت اولیه ارسال شد');
             const requestDataRegister = { BranchCode, BranchId, CardId, CarUsageId, CircuLationId: CardId, CirculationOptionIds, ColorCode, ColorId: ColorCode, CompanyCode, CrclRow, HaveYoungModule: false, SecondInsurerCode:"507", SecondInsurerId:"7", captchaResult: solvedCaptchaText, captchaToken: captchaReg.tokenid, count: 1 };
             const response = await fetch(register, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(requestDataRegister) });
             const data = await response.json();
@@ -1468,10 +1572,12 @@
             if (!data?.banks?.length) throw new Error("لیست بانک نامعتبر یا ظرفیت تکمیل.");
 
             const randomBank = data.banks[Math.floor(Math.random() * data.banks.length)];
+            updateLiveConsole({ bank: randomBank.bankName, status: `بانک انتخاب شد: ${randomBank.bankName}` }, `بانک انتخاب شد: ${randomBank.bankName}`);
 
             updateProcessStatus('تایید اطلاعات...');
             await fetch(confirmdata, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ id: randomBank.id }) });
             updateProcessStatus('دریافت کپچاهای نهایی...');
+            appendConsoleLog('دریافت کپچاهای نهایی');
             const captcha1 = await fetchCaptchasstep2();
             const captcha2 = await fetchCaptchasstep2();
             if (!captcha1 || !captcha2) throw new Error("کپچای نهایی ناموفق.");
@@ -1481,6 +1587,7 @@
             if (!solvedCaptcha1Text || !solvedCaptcha2Text) throw new Error("حل کپچای نهایی ناموفق.");
 
             updateProcessStatus('ارسال تایید نهایی...');
+            appendConsoleLog('ارسال تایید نهایی');
             const requestDataFill = { bankName: randomBank.bankName, captchaResult: solvedCaptcha1Text, captchaToken: captcha1.tokenid, confirmAffidavit: true, isAccept: true, onlineshoppingId: data.id };
             const responseFillConfirm = await fetch(fillconfirm, { method: 'POST', headers: { "Accept": "application/json", "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(requestDataFill) });
             const resultfilldata = await responseFillConfirm.json();
@@ -1489,18 +1596,31 @@
             await checkResultLoop(data.id, resultfilldata.queueId);
 
             updateProcessStatus('بررسی لینک رزرو...');
+            appendConsoleLog('بررسی لینک رزرو');
             const serverdata = { megaCaptchaResult: solvedCaptcha2Text, megaCaptchaToken: captcha2.tokenid };
             const responseGetUrl = await fetch(getreverseurl, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` }, body: JSON.stringify(serverdata) });
             const respomsegeturl = await responseGetUrl.json();
 
+            // New bankUrl handling
+            if (respomsegeturl?.data?.bankUrl) {
+                const bankUrl = respomsegeturl.data.bankUrl;
+                showBankLink(bankUrl);
+                updateLiveConsole({ status: 'لینک بانک دریافت شد' }, 'لینک بانک دریافت شد');
+                window.open(bankUrl, "_blank");
+                return true;
+            }
             if (respomsegeturl?.data?.url) {
-                updateProcessStatus('انتقال به لینک رزرو...');
-                window.location.href = respomsegeturl.data.url;
+                const bankUrl = respomsegeturl.data.url;
+                updateProcessStatus('لینک رزرو دریافت شد.');
+                updateLiveConsole({ status: 'لینک رزرو دریافت شد' }, 'لینک رزرو دریافت شد');
+                showBankLink(bankUrl);
+                window.open(bankUrl, "_blank");
             }
             return true; // Indicate success
         } catch (error) {
             console.error("Register/Confirm Error:", error);
             updateProcessStatus(`خطا در ثبت: ${error.message}. تلاش با گزینه‌ای دیگر...`, true);
+            updateLiveConsole({ status: 'خطای ثبت/تایید' }, `خطای ثبت: ${error.message}`);
             await new Promise(resolve => setTimeout(resolve, 1500));
             return false; // Indicate failure
         }
@@ -1563,9 +1683,113 @@
         });
     }
 
+    // ===== Live Console: init + update + logs =====
+    let _saipaConsole = null;
+    let _saipaState = { car:'', province:'', city:'', branch:'', bank:'', plan:'', price:'', status:'' };
+    let _saipaBankShown = false;
+
+    function initLiveConsole() {
+        if (document.getElementById('saipa-live-console-styles') === null) {
+            const s = document.createElement('style');
+            s.id = 'saipa-live-console-styles';
+            s.textContent = liveConsoleStyles;
+            document.head.appendChild(s);
+        }
+        if (_saipaConsole) return;
+        const c = document.createElement('div');
+        c.className = 'saipa-live-console';
+        c.innerHTML = `
+            <div class="lc-header">
+              <span>🔍 وضعیت ربات</span>
+              <div><button id="lc-toggle" style="background:none;color:#fff;border:none;cursor:pointer">▤</button></div>
+            </div>
+            <div class="lc-body">
+              <div class="lc-field"><div class="label">خودرو</div><div id="lc-car" class="value">—</div></div>
+              <div class="lc-field"><div class="label">استان</div><div id="lc-province" class="value">—</div></div>
+              <div class="lc-field"><div class="label">شهر</div><div id="lc-city" class="value">—</div></div>
+              <div class="lc-field"><div class="label">نمایندگی</div><div id="lc-branch" class="value">—</div></div>
+              <div class="lc-field"><div class="label">بانک</div><div id="lc-bank" class="value">—</div></div>
+              <div class="lc-field"><div class="label">طرح</div><div id="lc-plan" class="value">—</div></div>
+              <div class="lc-field"><div class="label">قیمت</div><div id="lc-price" class="value">—</div></div>
+              <div class="lc-field"><div class="label">وضعیت</div><div id="lc-status" class="value">—</div></div>
+            </div>
+            <div class="lc-logs" id="lc-logs"></div>
+        `;
+        const host = document.querySelector('.saipa-bot-container');
+        if (host) {
+            c.classList.add('embedded');
+            const headerInHost = host.querySelector('.saipa-bot-header');
+            if (headerInHost && headerInHost.nextSibling) {
+                host.insertBefore(c, headerInHost.nextSibling);
+            } else {
+                host.appendChild(c);
+            }
+        } else {
+            document.body.appendChild(c);
+        }
+        const toggleBtn = c.querySelector('#lc-toggle');
+        if (toggleBtn) toggleBtn.addEventListener('click', () => {
+            c.classList.toggle('collapsed');
+        });
+        // Also allow clicking header to toggle in embedded mode
+        const header = c.querySelector('.lc-header');
+        if (header) header.addEventListener('click', (e) => {
+            if ((e.target && e.target.id) === 'lc-toggle') return;
+            c.classList.toggle('collapsed');
+        });
+        _saipaConsole = c;
+    }
+
+    function updateLiveConsole(data = {}, logMsg = '') {
+        if (!_saipaConsole) initLiveConsole();
+        Object.assign(_saipaState, data);
+        for (const [key, val] of Object.entries(_saipaState)) {
+            const el = document.getElementById('lc-' + key);
+            if (el) el.textContent = val || '—';
+        }
+        if (logMsg) appendConsoleLog(logMsg);
+    }
+
+    function appendConsoleLog(msg) {
+        const list = document.getElementById('lc-logs');
+        if (!list) return;
+        const time = new Date().toLocaleTimeString();
+        const div = document.createElement('div');
+        div.className = 'lc-log-item';
+        div.innerHTML = `<span class="time">[${time}]</span>${msg}`;
+        list.appendChild(div);
+        list.scrollTop = list.scrollHeight;
+    }
+
+    function showBankLink(bankUrl) {
+        // inject styles once
+        if (!document.getElementById('saipa-bank-link-styles')) {
+            const s = document.createElement('style');
+            s.id = 'saipa-bank-link-styles';
+            s.textContent = bankLinkStyles;
+            document.head.appendChild(s);
+        }
+        if (_saipaBankShown) return;
+        const host = document.querySelector('.saipa-bot-container') || document.body;
+        const toast = document.createElement('div');
+        toast.className = 'saipa-bank-link-toast';
+        toast.innerHTML = `
+          <div class="title">لینک درگاه بانکی آماده است</div>
+          <div>در صورت عدم باز شدن خودکار، با دکمه زیر وارد شوید:</div>
+          <div style="margin-top:10px; display:flex; gap:8px; justify-content:flex-end;">
+            <button id="saipa-bank-open-btn" class="saipa-bot-button saipa-bot-button-submit" style="width:auto !important;">باز کردن درگاه</button>
+          </div>
+        `;
+        host.appendChild(toast);
+        const openBtn = toast.querySelector('#saipa-bank-open-btn');
+        if (openBtn) openBtn.addEventListener('click', () => window.open(bankUrl, '_blank'));
+        _saipaBankShown = true;
+    }
+
     function initialize() {
         mainContainer = createMainContainer();
         setupHeader(mainContainer);
+        initLiveConsole();
         reloadContent();
         setupFloatingButtons();
     }

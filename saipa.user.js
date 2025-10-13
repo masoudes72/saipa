@@ -1013,6 +1013,7 @@
                     const lastName = responseData?.data?.customer?.lastName || '';
                     const displayName = `${firstName} ${lastName}`.trim() || usernameValue;
                     saveAccount(usernameValue, passwordValue, displayName);
+                    try { GM_setValue('lastLoggedAccount', { username: usernameValue, password: passwordValue, displayName }); } catch (e) {}
                     isLoggedIn = true;
                     displayUserName(document.getElementById('saipa-bot-header-user'));
                     contentAreaContainer.innerHTML = '';
@@ -2097,6 +2098,7 @@
         ensurePanelCloseButton();
         reloadContent();
         setupFloatingButtons();
+        try { setupSigninAutofillButton(); } catch (e) {}
     }
 
     function setupFloatingButtons() {
@@ -2199,6 +2201,53 @@
             document.body.classList.remove('saipa-panel-open');
         });
         mainContainer.appendChild(btn);
+    }
+
+    function setupSigninAutofillButton() {
+        // Only apply on the native sign-in page
+        if (!/\/auth\/signin/i.test(location.pathname)) return;
+        const launcher = document.getElementById('saipa-bot-toggle-button-new');
+        if (!launcher || document.getElementById('saipa-autofill-btn')) return;
+
+        const btn = document.createElement('button');
+        btn.id = 'saipa-autofill-btn';
+        btn.type = 'button';
+        btn.className = 'saipa-bot-button saipa-bot-button-submit';
+        btn.style.setProperty('position', 'fixed', 'important');
+        btn.style.setProperty('top', '75px', 'important');
+        btn.style.setProperty('right', '25px', 'important');
+        btn.style.setProperty('width', 'auto', 'important');
+        btn.style.setProperty('z-index', '10002', 'important');
+        btn.textContent = 'پرکردن اطلاعات ورود';
+        btn.addEventListener('click', () => {
+            const account = GM_getValue('lastLoggedAccount') || (GM_getValue('savedAccounts', [])[0]) || null;
+            const nat = document.querySelector('#login_national_Code');
+            const pass = document.querySelector('#login_password');
+            if (!account || !nat || !pass) { alert('حساب ذخیره‌شده یا فیلدهای ورود پیدا نشد.'); return; }
+
+            // Use native setter to keep frameworks (React/Angular) in sync
+            const setNative = (input, value) => {
+                const proto = Object.getPrototypeOf(input);
+                const desc = Object.getOwnPropertyDescriptor(proto, 'value');
+                if (desc && desc.set) { desc.set.call(input, value); }
+                else { input.value = value; }
+                input.setAttribute('value', value);
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+                input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: '0' }));
+            };
+
+            // Normalize national code to digits
+            const national = String(account.username || '').replace(/\D/g, '').slice(0, 10);
+            const password = String(account.password || '');
+
+            nat.focus();
+            setNative(nat, national);
+            pass.focus();
+            setNative(pass, password);
+            pass.blur();
+        });
+        document.body.appendChild(btn);
     }
 
     initialize();

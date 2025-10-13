@@ -415,10 +415,9 @@
   transition: all 0.3s ease;
 }
 /* Embedded mode inside panel */
-.saipa-live-console.embedded {
-  position: static; right: auto; bottom: auto; width: 100%; max-height: 260px;
+.saipa-live-console.embedded { position: static; right: auto; bottom: auto; width: 100%; max-height: 260px;
   background: var(--dark-surface); color: var(--dark-text);
-  border: 1px solid var(--dark-border); box-shadow: none; margin-top: 8px;
+  border: 1px solid var(--dark-border); box-shadow: none; margin-top: 8px; margin-bottom: 10px;
 }
 .saipa-live-console .lc-header {
   display: flex; justify-content: space-between; align-items: center;
@@ -458,6 +457,9 @@
   }
   .saipa-live-console .lc-body { flex-direction: column; }
   .saipa-live-console.embedded { max-height: 40vh; }
+  /* Mobile embedded: sticky at top of panel, prevent overlap */
+  .saipa-live-console.embedded.mobile { position: sticky; top: 0; z-index: 1; margin-top: 8px; }
+  .saipa-live-console.embedded.mobile .lc-logs { max-height: 100px; }
 }
 `;
 
@@ -482,6 +484,82 @@
 }
 `;
 
+    // Responsive UI fix styles (floating buttons, console, spacing)
+    const responsiveFixStyles = `
+/* 🔹 Floating Buttons - responsive layout fix */
+.saipa-action-button {
+  position: fixed !important;
+  right: 20px !important;
+  z-index: 10001 !important;
+  width: 56px !important;
+  height: 56px !important;
+  border-radius: 50% !important;
+  transition: var(--dark-transition) !important;
+}
+
+/* فاصله‌ی بیشتر از کنسول زنده */
+.saipa-button-new-reload { bottom: 120px !important; }
+.saipa-button-new-clear { bottom: 190px !important; }
+.saipa-button-new-captcha { bottom: 260px !important; }
+.saipa-button-new-update { bottom: 330px !important; }
+
+/* 🔸 موبایل: ردیف افقی پایین صفحه */
+@media (max-width: 768px) {
+  .saipa-action-button {
+    position: fixed !important;
+    bottom: 10px !important;
+    width: 50px !important;
+    height: 50px !important;
+    border-radius: 12px !important;
+    background: var(--dark-surface) !important;
+  }
+  .saipa-button-new-reload,
+  .saipa-button-new-clear,
+  .saipa-button-new-captcha,
+  .saipa-button-new-update {
+    bottom: 10px !important;
+  }
+  .saipa-button-new-reload { right: calc(15px + 0 * 60px) !important; }
+  .saipa-button-new-clear { right: calc(15px + 1 * 60px) !important; }
+  .saipa-button-new-captcha { right: calc(15px + 2 * 60px) !important; }
+  .saipa-button-new-update { right: calc(15px + 3 * 60px) !important; }
+}
+
+/* 🔹 Live Console embedded fix */
+.saipa-live-console.embedded {
+  position: relative;
+  margin-top: 15px;
+  width: 100%;
+  max-height: 250px;
+  overflow-y: auto;
+  z-index: 1;
+}
+
+/* در موبایل، کنسول بالای فرم می‌چسبد */
+@media (max-width: 768px) {
+  .saipa-live-console.embedded {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    margin-bottom: 8px;
+  }
+}
+
+/* 🔸 تنظیم فاصله بین پریست و کنسول */
+#preset-summary {
+  margin-bottom: 20px !important;
+}
+
+/* 🔹 جلوگیری از هم‌پوشانی */
+.saipa-bot-container {
+  margin-bottom: 80px !important; /* فاصله از دکمه‌های پایین */
+}
+`;
+
+    // inject responsive fix styles
+    const fixStyleEl = document.createElement('style');
+    fixStyleEl.textContent = responsiveFixStyles;
+    document.head.appendChild(fixStyleEl);
 
     // ****** HELPER FUNCTIONS FOR HEADER ******
     function getCookieValue(name) {
@@ -615,6 +693,8 @@
     let isLoggedIn = false;
     let searchAbortController = null;
     let isSearching = false;
+    let floatingButtons = [];
+
     function createMainContainer() {
         const existingContainer = document.querySelector('.saipa-bot-container');
         if (existingContainer) { existingContainer.remove(); }
@@ -937,6 +1017,7 @@
         presetRow.style.display = 'flex';
         presetRow.style.gap = '10px';
         presetRow.style.alignItems = 'center';
+        presetRow.style.marginTop = '6px';
         const presetSelect = buildPresetDropdown();
         presetSelect.style.flex = '1 1 auto';
         const newPresetBtn = document.createElement('button');
@@ -1738,6 +1819,14 @@
             c.classList.toggle('collapsed');
         });
         _saipaConsole = c;
+        // responsive behavior for mobile
+        function syncConsoleResponsive() {
+            if (!_saipaConsole) return;
+            const isMobile = window.matchMedia('(max-width: 600px)').matches;
+            _saipaConsole.classList.toggle('mobile', isMobile);
+        }
+        syncConsoleResponsive();
+        window.addEventListener('resize', syncConsoleResponsive);
     }
 
     function updateLiveConsole(data = {}, logMsg = '') {
@@ -1807,7 +1896,9 @@
         panelToggleSvg.innerHTML = `<path d="M4 18h16c.55 0 1-.45 1-1s-.45-1-1-1H4c-.55 0-1 .45-1 1s.45 1 1 1zm0-5h16c.55 0 1-.45 1-1s-.45-1-1-1H4c-.55 0-1 .45-1 1s.45 1 1 1zM3 7c0 .55.45 1 1 1h16c.55 0 1-.45 1-1s-.45-1-1-1H4c-.55 0-1 .45-1 1z"/>`;
         panelToggleButton.insertBefore(panelToggleSvg, panelToggleButton.firstChild);
         panelToggleButton.addEventListener('click', () => {
-            mainContainer.style.display = (window.getComputedStyle(mainContainer).display === 'none') ? 'flex' : 'none';
+            const willOpen = (window.getComputedStyle(mainContainer).display === 'none');
+            mainContainer.style.display = willOpen ? 'flex' : 'none';
+            setFloatingButtonsBehindPanel(willOpen);
         });
         document.body.appendChild(panelToggleButton);
 
@@ -1835,6 +1926,23 @@
             }
 
             document.body.appendChild(button);
+            floatingButtons.push(button);
+        });
+
+        // If panel is initially visible, ensure buttons are behind
+        const isPanelVisible = window.getComputedStyle(document.querySelector('.saipa-bot-container')).display !== 'none';
+        setFloatingButtonsBehindPanel(isPanelVisible);
+    }
+
+    function setFloatingButtonsBehindPanel(isBehind) {
+        const newZ = isBehind ? 999 : 10001;
+        const pe = isBehind ? 'auto' : 'auto';
+        floatingButtons.forEach(btn => {
+            btn.style.zIndex = String(newZ);
+            // ensure buttons are visually behind panel by also adding transform
+            if (isBehind) btn.style.boxShadow = 'none';
+            else btn.style.boxShadow = '';
+            btn.style.pointerEvents = pe;
         });
     }
 

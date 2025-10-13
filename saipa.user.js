@@ -5,6 +5,7 @@
 // @description  bot
 // @author       masoud
 // @match        *://saipa.iranecar.com/*
+// @match        *://saipa-customer-bank.iranecar.com/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
@@ -1661,6 +1662,25 @@
                  .map(x => x.p);
          }
 
+         // 3.1) Tolerance auto-select: if a plan exists within ±10,000,000 rials of priceTerm → auto-select
+         if (priceTerm != null) {
+             const RANGE = 10_000_000; // ±10,000,000 ریال
+             // Search within saleType filter scope (but ignore name filter to increase chance)
+             let pool = plans.slice();
+             if (saleTypeFilter) pool = pool.filter(p => String(p.saleType) === String(saleTypeFilter));
+             const within = pool
+                 .map(p => ({ p, diff: Math.abs(Number(p.basePrice || 0) - priceTerm) }))
+                 .filter(x => x.diff <= RANGE)
+                 .sort((a, b) => a.diff - b.diff);
+             if (within.length) {
+                 const best = within[0].p;
+                 const priceStr = (best.basePrice != null) ? Number(best.basePrice).toLocaleString('fa-IR') : '';
+                 updateProcessStatus(`طرح نزدیک به قیمت هدف انتخاب شد: "${best.title}" با قیمت ${priceStr}`);
+                 updateLiveConsole({ plan: best.title || '', price: priceStr, status: `طرح انتخاب شد: ${best.title || ''}` }, `طرح نزدیک به قیمت هدف انتخاب شد: ${best.title || ''} | ${priceStr}`);
+                 return best;
+             }
+         }
+
          // 4) Decide behavior and possibly render chooser
          const plansToOffer = filtered.length ? filtered : plans; // if no match, offer all
 
@@ -2107,6 +2127,7 @@
         reloadContent();
         setupFloatingButtons();
         try { setupSigninAutofillButton(); } catch (e) {}
+        try { setupBankResultCapture(); } catch (e) {}
     }
 
     function setupFloatingButtons() {
@@ -2256,6 +2277,51 @@
             pass.blur();
         });
         document.body.appendChild(btn);
+    }
+
+    function setupBankResultCapture() {
+        // Only on the bank register announce page
+        if (!/saipa-customer-bank\.iranecar\.com\/RegisterAnnouncePayment\.aspx/i.test(location.href)) return;
+        // Remove any prior toast/button from earlier runs
+        const oldToast = document.querySelector('.saipa-bank-link-toast');
+        if (oldToast) oldToast.remove();
+        const oldA = document.getElementById('saipa-bank-download-btn');
+        if (oldA) oldA.remove();
+
+        // Single big green button (top-left)
+        let quickBtn = document.getElementById('saipa-bank-quick-dl');
+        if (!quickBtn) {
+            quickBtn = document.createElement('button');
+            quickBtn.id = 'saipa-bank-quick-dl';
+            quickBtn.className = 'saipa-bot-button saipa-bot-button-submit';
+            quickBtn.textContent = 'دانلود لینک صفحه پرداخت';
+            quickBtn.style.position = 'fixed';
+            quickBtn.style.top = '12px';
+            quickBtn.style.left = '12px';
+            quickBtn.style.zIndex = '1000000';
+            quickBtn.style.width = 'auto';
+            quickBtn.style.setProperty('padding', '0 22px', 'important');
+            quickBtn.style.setProperty('height', '48px', 'important');
+            document.body.appendChild(quickBtn);
+        }
+
+        quickBtn.onclick = async () => {
+            try {
+                const content = `Page Title: ${document.title}\nURL: ${location.href}\nTime: ${new Date().toISOString()}\n`;
+                const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `payment-url-${Date.now()}.txt`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+            } catch (err) {
+                console.error('URL save error:', err);
+                alert('امکان ذخیره لینک صفحه وجود ندارد.');
+            }
+        };
     }
 
     initialize();

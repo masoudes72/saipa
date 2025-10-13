@@ -289,25 +289,47 @@
             align-items: center !important;
             gap: 10px !important;
             color: var(--dark-text) !important;
-            background: var(--dark-surface) !important;
+            background: linear-gradient(180deg, rgba(36,36,36,1) 0%, rgba(18,18,18,1) 100%) !important;
             border-radius: var(--dark-radius) !important;
             cursor: pointer !important;
             z-index: 10001 !important;
             border: 1px solid var(--dark-border) !important;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.25) !important;
-            transition: var(--dark-transition) !important;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.06) !important,
+                        inset 0 -10px 22px rgba(0,0,0,0.35) !important,
+                        0 5px 15px rgba(0,0,0,0.25) !important;
+            transition: background 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease, transform 0.2s ease !important;
+            outline: none !important;
         }
         #saipa-bot-toggle-button-new:hover {
-            background: var(--dark-surface) !important;
+            background: linear-gradient(180deg, rgba(42,42,42,1) 0%, rgba(22,22,22,1) 100%) !important;
             border-color: var(--dark-primary) !important;
             transform: translateY(-2px) !important;
-            box-shadow: 0 0 18px var(--dark-primary-glow) !important;
+            color: var(--dark-primary) !important;
+            box-shadow: 0 0 18px var(--dark-primary-glow) !important,
+                        inset 0 1px 0 rgba(255,255,255,0.08) !important,
+                        inset 0 -12px 26px rgba(0,0,0,0.35) !important,
+                        0 6px 18px rgba(0,0,0,0.28) !important;
+        }
+        #saipa-bot-toggle-button-new:active {
+            transform: translateY(0) scale(0.98) !important;
+            box-shadow: inset 0 0 0 1px var(--dark-border) !important,
+                        inset 0 -8px 18px rgba(0,0,0,0.4) !important,
+                        0 3px 10px rgba(0,0,0,0.3) !important;
+        }
+        #saipa-bot-toggle-button-new:focus-visible {
+            outline: none !important;
+            box-shadow: 0 0 0 3px rgba(255,222,100,0.15) !important,
+                        0 0 18px var(--dark-primary-glow) !important,
+                        inset 0 1px 0 rgba(255,255,255,0.06) !important;
+            border-color: var(--dark-primary) !important;
         }
         #saipa-bot-toggle-button-new svg {
             width: 24px !important;
             height: 24px !important;
             fill: var(--dark-text) !important;
+            transition: fill 0.25s ease !important;
         }
+        #saipa-bot-toggle-button-new:hover svg { fill: var(--dark-primary) !important; }
         /* When panel is open, push launcher behind; hide on mobile */
         body.saipa-panel-open #saipa-bot-toggle-button-new { z-index: 1 !important; pointer-events: none !important; }
         @media (max-width: 768px) {

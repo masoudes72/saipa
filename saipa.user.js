@@ -1022,17 +1022,17 @@
         presetSelect.style.flex = '1 1 auto';
         const newPresetBtn = document.createElement('button');
         newPresetBtn.type = 'button';
-        newPresetBtn.textContent = 'پریست جدید';
+        newPresetBtn.textContent = 'افزودن';
         newPresetBtn.className = 'saipa-bot-button saipa-bot-button-secondary';
         newPresetBtn.style.setProperty('width', 'auto', 'important');
         const deletePresetBtn = document.createElement('button');
         deletePresetBtn.type = 'button';
-        deletePresetBtn.textContent = 'حذف پریست';
+        deletePresetBtn.textContent = 'حذف';
         deletePresetBtn.className = 'saipa-bot-button saipa-bot-button-secondary';
         deletePresetBtn.style.setProperty('width', 'auto', 'important');
         const setDefaultBtn = document.createElement('button');
         setDefaultBtn.type = 'button';
-        setDefaultBtn.textContent = 'پیش‌فرض';
+        setDefaultBtn.textContent = 'پیشفرض';
         setDefaultBtn.className = 'saipa-bot-button saipa-bot-button-secondary';
         setDefaultBtn.style.setProperty('width', 'auto', 'important');
 
@@ -1977,4 +1977,3 @@
     initialize();
 
 })();
-

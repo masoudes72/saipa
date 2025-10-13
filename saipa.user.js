@@ -606,6 +606,53 @@
         contentAreaContainer.innerHTML = '';
         const logindiv = document.createElement("div");
         logindiv.classList.add("saipa-bot-card");
+
+        // لیست حساب‌های ذخیره‌شده (در صورت وجود)
+        const savedAccounts = GM_getValue('savedAccounts', []);
+        let selectAccount = null;
+        if (Array.isArray(savedAccounts) && savedAccounts.length > 0) {
+            // ردیف افقی شامل سلکت و دکمه پاکسازی
+            const selectRow = document.createElement('div');
+            selectRow.style.display = 'flex';
+            selectRow.style.gap = '10px';
+
+            selectAccount = document.createElement('select');
+            selectAccount.id = 'saved-accounts-select';
+            selectAccount.classList.add('saipa-bot-input');
+            selectAccount.style.flex = '1 1 auto';
+
+            const defaultOption = document.createElement('option');
+            defaultOption.value = '';
+            defaultOption.textContent = 'انتخاب حساب کاربری ذخیره شده';
+            selectAccount.appendChild(defaultOption);
+
+            savedAccounts.forEach((acc, index) => {
+                const option = document.createElement('option');
+                option.value = String(index);
+                option.textContent = (acc && acc.displayName ? acc.displayName : acc.username);
+                selectAccount.appendChild(option);
+            });
+
+            const clearAccountsBtn = document.createElement('button');
+            clearAccountsBtn.type = 'button';
+            clearAccountsBtn.textContent = 'پاک‌سازی';
+            clearAccountsBtn.classList.add('saipa-bot-button', 'saipa-bot-button-secondary');
+            // Override full width to keep it beside select
+            clearAccountsBtn.style.setProperty('width', 'auto', 'important');
+            clearAccountsBtn.style.flex = '0 0 auto';
+            clearAccountsBtn.addEventListener('click', () => {
+                if (confirm('لیست حساب‌های ذخیره‌شده پاک شود؟')) {
+                    GM_setValue('savedAccounts', []);
+                    alert('لیست حساب‌ها پاک شد.');
+                    fetchCaptcha();
+                }
+            });
+
+            selectRow.appendChild(selectAccount);
+            selectRow.appendChild(clearAccountsBtn);
+            logindiv.appendChild(selectRow);
+        }
+
         const fields = [
             { id: 'username-input', placeholder: 'کد ملی', type: 'text' },
             { id: 'password-input', placeholder: 'رمز عبور', type: 'password' },
@@ -621,6 +668,22 @@
             logindiv.appendChild(input);
 
         });
+
+        // پر کردن خودکار فیلدها پس از انتخاب حساب از لیست
+        if (selectAccount) {
+            selectAccount.addEventListener('change', (e) => {
+                const selectedIndex = e.target.value;
+                if (selectedIndex !== '') {
+                    const selectedAccount = savedAccounts[parseInt(selectedIndex, 10)];
+                    const userInput = logindiv.querySelector('#username-input');
+                    const passInput = logindiv.querySelector('#password-input');
+                    if (userInput && passInput && selectedAccount) {
+                        userInput.value = selectedAccount.username || '';
+                        passInput.value = selectedAccount.password || '';
+                    }
+                }
+            });
+        }
 
         const img = document.createElement('img');
         img.src = imageUrl;
@@ -654,6 +717,10 @@
 
                 if (response.ok && responseData?.data?.token) {
                     saveLoginDataToCookies(responseData);
+                    const firstName = responseData?.data?.customer?.firstName || '';
+                    const lastName = responseData?.data?.customer?.lastName || '';
+                    const displayName = `${firstName} ${lastName}`.trim() || usernameValue;
+                    saveAccount(usernameValue, passwordValue, displayName);
                     isLoggedIn = true;
                     displayUserName(document.getElementById('saipa-bot-header-user'));
                     contentAreaContainer.innerHTML = '';
@@ -680,6 +747,93 @@
         document.cookie = `customerLastName=${encodeURIComponent(customer.lastName || '')}; path=/; expires=${expires}; SameSite=Lax`;
     }
 
+    function saveAccount(username, password, displayName) {
+        let accounts = GM_getValue("savedAccounts", []);
+        // اگر این حساب از قبل وجود ندارد، اضافه کن
+        if (!accounts.some(acc => acc.username === username)) {
+            accounts.push({ username, password, displayName });
+            GM_setValue("savedAccounts", accounts);
+        } else {
+            // در صورت وجود، فقط نمایش‌نام را به‌روزرسانی کن (برای پشتیبانی از تغییر نام کاربری نمایش داده‌شده)
+            accounts = accounts.map(acc => acc.username === username ? { ...acc, displayName: displayName || acc.displayName } : acc);
+            GM_setValue("savedAccounts", accounts);
+        }
+    }
+
+    // ======= Search Presets Helpers =======
+    function loadPresets() {
+        return GM_getValue("searchPresets", []);
+    }
+
+    function savePreset(preset) {
+        let presets = loadPresets();
+        const existing = presets.find(p => p.name === preset.name);
+        if (existing) {
+            Object.assign(existing, preset);
+        } else {
+            presets.push(preset);
+        }
+        GM_setValue("searchPresets", presets);
+    }
+
+    function deletePreset(name) {
+        let presets = loadPresets().filter(p => p.name !== name);
+        GM_setValue("searchPresets", presets);
+    }
+
+    function getDefaultPresetName() {
+        return GM_getValue("defaultPresetName", "");
+    }
+
+    function setDefaultPreset(name) {
+        GM_setValue("defaultPresetName", name || "");
+    }
+
+    function applyPresetToForm(preset) {
+        if (!preset) return;
+        const searchTermEl = document.getElementById('search-term-input');
+        const salesPlanEl = document.getElementById('sales-plan-input');
+        const priceEl = document.getElementById('price-term-input');
+        const cityEl = document.getElementById('city-term-input');
+        const provinceEl = document.getElementById('province-select-input');
+        const saleTypeEl = document.getElementById('sale-type-input');
+        const exactMatchEl = document.getElementById('exact-match-checkbox');
+
+        if (searchTermEl) searchTermEl.value = preset.searchTerm || "";
+        if (salesPlanEl) salesPlanEl.value = preset.salesPlanTerm || "";
+        if (priceEl) priceEl.value = preset.priceTerm || "";
+        if (cityEl) cityEl.value = preset.city || "";
+        if (provinceEl) provinceEl.value = preset.provinceId || "4";
+        if (saleTypeEl) saleTypeEl.value = preset.saleType || "";
+        if (exactMatchEl) exactMatchEl.checked = !!preset.exactMatch;
+    }
+
+    function buildPresetDropdown() {
+        const presets = loadPresets();
+        const select = document.createElement("select");
+        select.id = "preset-select";
+        select.classList.add("saipa-bot-input");
+
+        const defaultOption = document.createElement("option");
+        defaultOption.value = "";
+        defaultOption.textContent = "انتخاب پریست ذخیره‌شده...";
+        select.appendChild(defaultOption);
+
+        presets.forEach(p => {
+            const opt = document.createElement("option");
+            opt.value = p.name;
+            opt.textContent = p.name;
+            select.appendChild(opt);
+        });
+
+        select.addEventListener("change", (e) => {
+            const selected = presets.find(p => p.name === e.target.value);
+            applyPresetToForm(selected);
+        });
+
+        return select;
+    }
+
     function reloadContent() {
         if (!contentAreaContainer) return;
         isSearching = false;
@@ -697,7 +851,66 @@
         const searchAreaDiv = document.createElement('div');
         searchAreaDiv.classList.add('saipa-bot-card');
 
-        searchAreaDiv.innerHTML = `
+        // Preset controls row (dropdown + buttons)
+        const presetRow = document.createElement('div');
+        presetRow.style.display = 'flex';
+        presetRow.style.gap = '10px';
+        presetRow.style.alignItems = 'center';
+        const presetSelect = buildPresetDropdown();
+        presetSelect.style.flex = '1 1 auto';
+        const newPresetBtn = document.createElement('button');
+        newPresetBtn.type = 'button';
+        newPresetBtn.textContent = 'پریست جدید';
+        newPresetBtn.className = 'saipa-bot-button saipa-bot-button-secondary';
+        newPresetBtn.style.setProperty('width', 'auto', 'important');
+        const deletePresetBtn = document.createElement('button');
+        deletePresetBtn.type = 'button';
+        deletePresetBtn.textContent = 'حذف پریست';
+        deletePresetBtn.className = 'saipa-bot-button saipa-bot-button-secondary';
+        deletePresetBtn.style.setProperty('width', 'auto', 'important');
+        const setDefaultBtn = document.createElement('button');
+        setDefaultBtn.type = 'button';
+        setDefaultBtn.textContent = 'ثبت به عنوان پیش‌فرض';
+        setDefaultBtn.className = 'saipa-bot-button saipa-bot-button-secondary';
+        setDefaultBtn.style.setProperty('width', 'auto', 'important');
+
+        presetRow.appendChild(presetSelect);
+        presetRow.appendChild(newPresetBtn);
+        presetRow.appendChild(deletePresetBtn);
+        presetRow.appendChild(setDefaultBtn);
+        searchAreaDiv.appendChild(presetRow);
+
+        // Preset editor (hidden until opened)
+        const presetEditor = document.createElement('div');
+        presetEditor.className = 'saipa-bot-card';
+        presetEditor.style.display = 'none';
+        presetEditor.innerHTML = `
+            <h3 style="margin:0; text-align:center;">ایجاد/ویرایش پریست</h3>
+            <input type="text" id="preset-name-input" class="saipa-bot-input" placeholder="نام پریست">
+            <select id="editor-province-select" class="saipa-bot-input"></select>
+            <input type="text" id="editor-search-term-input" class="saipa-bot-input" placeholder="نام خودرو">
+            <input type="text" id="editor-sales-plan-input" class="saipa-bot-input" placeholder="نام طرح فروش (اختیاری)">
+            <input type="text" id="editor-price-term-input" class="saipa-bot-input" placeholder="قیمت (اختیاری)">
+            <input type="text" id="editor-city-term-input" class="saipa-bot-input" placeholder="نام شهر (اختیاری)">
+            <select id="editor-sale-type-input" class="saipa-bot-input">
+              <option value="">همه نوع فروش</option>
+              <option value="3">فروش فوری</option>
+              <option value="5">فروش فوری اعتباری</option>
+            </select>
+            <label style="display:flex; align-items:center; gap:8px; font-size:14px; color: var(--dark-text-muted);">
+              <input type="checkbox" id="editor-exact-match-checkbox" style="width:auto;height:auto;"> جستجوی دقیق نام خودرو
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; font-size:14px; color: var(--dark-text-muted);">
+              <input type="checkbox" id="preset-default-checkbox" style="width:auto;height:auto;"> ذخیره به عنوان پیش‌فرض
+            </label>
+            <div style="display:flex; gap:10px; justify-content:flex-end;">
+              <button id="preset-save-btn" class="saipa-bot-button saipa-bot-button-submit" style="width:auto !important;">ذخیره</button>
+              <button id="preset-cancel-btn" class="saipa-bot-button saipa-bot-button-secondary" style="width:auto !important;">انصراف</button>
+            </div>
+        `;
+        searchAreaDiv.appendChild(presetEditor);
+
+        searchAreaDiv.insertAdjacentHTML('beforeend', `
             <h2 style="font-size: 1.4em; text-align: center; color: var(--dark-primary); margin:0;">جستجوی خودرو</h2>
             <select id="province-select-input" class="saipa-bot-input">
                 <option value="4">تهران (پیش‌فرض)</option>
@@ -715,7 +928,48 @@
               <option value="3">فروش فوری</option>
               <option value="5">فروش فوری اعتباری</option>
             </select>
-        `;
+        `);
+
+        // Hide legacy search form and show compact preset summary instead
+        const legacyH2 = searchAreaDiv.querySelector('h2');
+        if (legacyH2) legacyH2.style.display = 'none';
+        const idsToHide = [
+          'province-select-input', 'search-term-input', 'sales-plan-input',
+          'price-term-input', 'city-term-input', 'sale-type-input', 'exact-match-checkbox'
+        ];
+        idsToHide.forEach(id => {
+            const el = searchAreaDiv.querySelector('#' + id);
+            if (el) {
+                if (id === 'exact-match-checkbox' && el.parentElement) el.parentElement.style.display = 'none';
+                el.style.display = 'none';
+            }
+        });
+
+        // Preset summary block
+        const presetSummary = document.createElement('div');
+        presetSummary.id = 'preset-summary';
+        presetSummary.className = 'saipa-bot-card';
+        const renderPresetSummary = (p) => {
+            if (!p) { presetSummary.innerHTML = '<div style="text-align:center;color:var(--dark-text-muted)">هیچ پریستی انتخاب نشده است.</div>'; return; }
+            const provId = Number(p.provinceId || 4);
+            const prov = provinces.find(pr => Number(pr.id) === provId);
+            const provinceName = prov ? prov.name : String(provId);
+            presetSummary.innerHTML = `
+                <h3 style="margin:0;text-align:center;color:var(--dark-primary)">پریست انتخاب‌شده: ${p.name}</h3>
+                <div style="display:grid;grid-template-columns:120px 1fr;gap:8px;">
+                  <div style="color:var(--dark-text-muted)">استان</div><div>${provinceName}</div>
+                  <div style="color:var(--dark-text-muted)">نام خودرو</div><div>${p.searchTerm || ''}</div>
+                  <div style="color:var(--dark-text-muted)">طرح فروش</div><div>${p.salesPlanTerm || ''}</div>
+                  <div style="color:var(--dark-text-muted)">قیمت</div><div>${p.priceTerm || ''}</div>
+                  <div style="color:var(--dark-text-muted)">شهر</div><div>${p.city || ''}</div>
+                  <div style="color:var(--dark-text-muted)">نوع فروش</div><div>${p.saleType || ''}</div>
+                  <div style="color:var(--dark-text-muted)">دقیق</div><div>${p.exactMatch ? 'بله' : 'خیر'}</div>
+                </div>
+            `;
+        };
+        searchAreaDiv.appendChild(presetSummary);
+
+        // Keep creating the search button below
         const searchButton = document.createElement('button');
         searchButton.type = 'button';
         searchButton.className = 'btn';
@@ -741,7 +995,17 @@
             option.textContent = province.name;
             provinceSelect.appendChild(option);
         });
-        
+
+        // Populate editor province dropdown
+        const editorProvince = searchAreaDiv.querySelector('#editor-province-select');
+        if (editorProvince) {
+            provinces.forEach(province => {
+                const opt = document.createElement('option');
+                opt.value = province.id;
+                opt.textContent = province.name;
+                editorProvince.appendChild(opt);
+            });
+        }
 
         const priceInput = document.getElementById('price-term-input');
         priceInput.addEventListener('input', (e) => {
@@ -753,21 +1017,145 @@
             }
         });
 
+        // New preset: toggle editor
+        newPresetBtn.addEventListener('click', () => {
+            presetEditor.style.display = presetEditor.style.display === 'none' ? 'flex' : 'none';
+            presetEditor.style.flexDirection = 'column';
+            const nameInput = presetEditor.querySelector('#preset-name-input');
+            const defaultChk = presetEditor.querySelector('#preset-default-checkbox');
+            const eProvince = presetEditor.querySelector('#editor-province-select');
+            const eSearch = presetEditor.querySelector('#editor-search-term-input');
+            const eSales = presetEditor.querySelector('#editor-sales-plan-input');
+            const ePrice = presetEditor.querySelector('#editor-price-term-input');
+            const eCity = presetEditor.querySelector('#editor-city-term-input');
+            const eSaleType = presetEditor.querySelector('#editor-sale-type-input');
+            const eExact = presetEditor.querySelector('#editor-exact-match-checkbox');
+            if (nameInput) nameInput.value = '';
+            if (defaultChk) defaultChk.checked = false;
+            if (eProvince) eProvince.value = document.getElementById('province-select-input').value;
+            if (eSearch) eSearch.value = document.getElementById('search-term-input').value.trim();
+            if (eSales) eSales.value = document.getElementById('sales-plan-input').value.trim();
+            if (ePrice) ePrice.value = document.getElementById('price-term-input').value.trim();
+            if (eCity) eCity.value = document.getElementById('city-term-input').value.trim();
+            if (eSaleType) eSaleType.value = document.getElementById('sale-type-input').value;
+            if (eExact) eExact.checked = document.getElementById('exact-match-checkbox').checked;
+        });
+
+        // Save preset handler (from editor)
+        const presetSaveBtn = searchAreaDiv.querySelector('#preset-save-btn');
+        const presetCancelBtn = searchAreaDiv.querySelector('#preset-cancel-btn');
+        if (presetSaveBtn) {
+            presetSaveBtn.addEventListener('click', () => {
+                const nameInput = presetEditor.querySelector('#preset-name-input');
+                const defaultChk = presetEditor.querySelector('#preset-default-checkbox');
+                const eProvince = presetEditor.querySelector('#editor-province-select');
+                const eSearch = presetEditor.querySelector('#editor-search-term-input');
+                const eSales = presetEditor.querySelector('#editor-sales-plan-input');
+                const ePrice = presetEditor.querySelector('#editor-price-term-input');
+                const eCity = presetEditor.querySelector('#editor-city-term-input');
+                const eSaleType = presetEditor.querySelector('#editor-sale-type-input');
+                const eExact = presetEditor.querySelector('#editor-exact-match-checkbox');
+                const name = nameInput ? nameInput.value.trim() : '';
+                if (!name) { alert('نام پریست را وارد کنید.'); return; }
+                const preset = {
+                    name,
+                    searchTerm: eSearch ? eSearch.value.trim() : '',
+                    salesPlanTerm: eSales ? eSales.value.trim() : '',
+                    priceTerm: ePrice ? ePrice.value.trim() : '',
+                    city: eCity ? eCity.value.trim() : '',
+                    provinceId: eProvince ? eProvince.value : '4',
+                    saleType: eSaleType ? eSaleType.value : '',
+                    exactMatch: eExact ? !!eExact.checked : false,
+                };
+                savePreset(preset);
+                if (defaultChk && defaultChk.checked) setDefaultPreset(name);
+                // Rebuild dropdown options
+                const currentSelect = searchAreaDiv.querySelector('#preset-select');
+                const newSelect = buildPresetDropdown();
+                newSelect.style.flex = '1 1 auto';
+                presetRow.replaceChild(newSelect, currentSelect);
+                presetEditor.style.display = 'none';
+            });
+        }
+        if (presetCancelBtn) {
+            presetCancelBtn.addEventListener('click', () => {
+                presetEditor.style.display = 'none';
+            });
+        }
+
+        // Delete preset handler
+        deletePresetBtn.addEventListener('click', () => {
+            const selectEl = searchAreaDiv.querySelector('#preset-select');
+            const selectedName = selectEl ? selectEl.value : '';
+            if (!selectedName) { alert('هیچ پریستی انتخاب نشده است.'); return; }
+            if (!confirm(`پریست "${selectedName}" حذف شود؟`)) return;
+            deletePreset(selectedName);
+            // Refresh dropdown
+            const newSelect = buildPresetDropdown();
+            newSelect.style.flex = '1 1 auto';
+            presetRow.replaceChild(newSelect, selectEl);
+        });
+
+        // Set selected preset as default
+        setDefaultBtn.addEventListener('click', () => {
+            const selectEl = searchAreaDiv.querySelector('#preset-select');
+            const selectedName = selectEl ? selectEl.value : '';
+            if (!selectedName) { alert('هیچ پریستی انتخاب نشده است.'); return; }
+            setDefaultPreset(selectedName);
+            alert('پریست پیش‌فرض تنظیم شد.');
+        });
+
+        // Auto-apply default preset if exists
+        const defaultName = getDefaultPresetName();
+        if (defaultName) {
+            const presets = loadPresets();
+            const def = presets.find(p => p.name === defaultName);
+            if (def) {
+                applyPresetToForm(def);
+                // Also set dropdown selection to default
+                const selectEl = searchAreaDiv.querySelector('#preset-select');
+                if (selectEl) selectEl.value = defaultName;
+                // Render summary
+                renderPresetSummary(def);
+            }
+        } else {
+            // Render empty summary initially
+            const currentPresets = loadPresets();
+            const selected = currentPresets.find(p => p.name === (searchAreaDiv.querySelector('#preset-select')?.value || ''));
+            renderPresetSummary(selected);
+        }
+
+        // When user changes preset dropdown, update summary (and hidden inputs)
+        const presetDd = searchAreaDiv.querySelector('#preset-select');
+        if (presetDd) {
+            presetDd.addEventListener('change', (e) => {
+                const presets = loadPresets();
+                const sel = presets.find(p => p.name === e.target.value);
+                applyPresetToForm(sel);
+                renderPresetSummary(sel);
+            });
+        }
+
         searchButton.addEventListener('click', () => {
             if (isSearching) {
                 stopCarSearch();
             } else {
-                const searchTerm = document.getElementById('search-term-input').value.trim();
-                const salesPlanTerm = document.getElementById('sales-plan-input').value.trim();
-                const priceTerm = parseInt(document.getElementById('price-term-input').value.trim().replace(/,/g, '')) || null;
-                const saleTypeFilter = document.getElementById('sale-type-input').value.trim();
-                const exactMatch = document.getElementById('exact-match-checkbox').checked;
-                const specificCity = document.getElementById('city-term-input').value.trim();
-                const provinceId = document.getElementById('province-select-input').value;
+                // Read from selected preset rather than hidden inputs
+                const presets = loadPresets();
+                const selectedName = (searchAreaDiv.querySelector('#preset-select')?.value || '').trim();
+                const selected = presets.find(p => p.name === selectedName) || presets.find(p => p.name === getDefaultPresetName());
+                if (!selected || !selected.searchTerm) { alert('ابتدا یک پریست با نام خودرو انتخاب یا ایجاد کنید.'); return; }
+                const searchTerm = selected.searchTerm.trim();
+                const salesPlanTerm = (selected.salesPlanTerm || '').trim();
+                const priceTerm = selected.priceTerm ? parseInt(String(selected.priceTerm).replace(/,/g, '')) : null;
+                const saleTypeFilter = (selected.saleType || '').trim();
+                const exactMatch = !!selected.exactMatch;
+                const specificCity = (selected.city || '').trim();
+                const provinceId = String(selected.provinceId || '4');
                 if (searchTerm) {
                     startCarSearch(searchTerm, salesPlanTerm, priceTerm, saleTypeFilter, exactMatch, specificCity, provinceId);
                 } else {
-                    alert("نام خودرو را وارد کنید.");
+                    alert('نام خودرو در پریست خالی است.');
                 }
             }
         });

@@ -457,6 +457,7 @@
             top: 50%; left: 50%;
             opacity: 0; transform: translate(-50%, -50%) scale(0.85);
             transition: transform .25s ease, opacity .25s ease, box-shadow .25s ease, background .25s ease;
+            z-index: 10005;
         }
         .saipa-logo-badge.menu-open .saipa-logo-menu .logo-action,
         .saipa-logo-badge:hover .saipa-logo-menu .logo-action { opacity: 1; pointer-events: auto; }
@@ -816,8 +817,8 @@
             btn.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
             return btn;
         }
-        const actionUpdate = makeLogoAction('آپدیت', () => window.open('https://github.com/masoudes72/saipa/raw/refs/heads/main/saipa.user.js', '_blank'), 'pos-top');
-        const actionReload = makeLogoAction('ریلود', () => reloadContent(), 'pos-right');
+        const actionUpdate = makeLogoAction('بروزرسانی', () => window.open('https://github.com/masoudes72/saipa/raw/refs/heads/main/saipa.user.js', '_blank'), 'pos-right');
+        const actionReload = makeLogoAction('ریلود', () => reloadContent(), 'pos-top');
         const actionCaptcha = makeLogoAction('کپچا', () => toggleAutoCaptcha(), 'pos-bottom');
         const actionClear = makeLogoAction('حذف', () => clearSiteCookies(), 'pos-left');
         logoMenu.appendChild(actionUpdate);
@@ -829,8 +830,6 @@
             e.stopPropagation();
             logoBadge.classList.toggle('menu-open');
         });
-        // Close the radial menu when clicking outside
-        document.addEventListener('click', () => logoBadge.classList.remove('menu-open'));
         containerDiv.appendChild(logoBadge);
         contentAreaContainer = document.createElement('div');
         contentAreaContainer.classList.add('saipa-bot-content-area');
@@ -1600,6 +1599,124 @@
         }
     }
 
+    // ===== Step 2: Modular plan selection (name/price/type filters + interactive UI) =====
+    async function selectSalesPlanForModel(productId, salesPlanTerm = "", filters = {}) {
+        // We'll keep polling (like step 1) until at least one plan appears
+        let plans = [];
+        while (true) {
+            const url = `${circulationApiUrl}?carModelId=${productId}`; // API expects carModelId here
+            let payload = null;
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(response.statusText);
+                payload = await response.json();
+            } catch (e) {
+                updateProcessStatus('خطای شبکه در دریافت طرح فروش. تلاش مجدد...', true);
+                await new Promise(r => setTimeout(r, 3000));
+                continue;
+            }
+            plans = Array.isArray(payload?.data) ? payload.data : [];
+            if (!plans.length) {
+                updateProcessStatus('هیچ طرح فعالی یافت نشد. تلاش مجدد...', true);
+                await new Promise(r => setTimeout(r, 3000));
+                continue;
+            }
+            // We have at least one plan; proceed to filtering and break loop
+            break;
+        }
+
+         // 2) Normalize helper
+         const norm = (s) => (s || "").toString().trim().toLowerCase();
+
+         // 3) Apply filters
+         const saleTypeFilter = filters?.saleType || filters?.saleTypeFilter || "";
+         const priceTerm = (filters?.priceTerm != null && filters?.priceTerm !== "") ? Number(String(filters.priceTerm).replace(/,/g, '')) : null;
+         const cityFilter = filters?.city || filters?.specificCity || ""; // kept for parity; actual city is chosen later
+
+         let filtered = plans.slice();
+         if (saleTypeFilter) filtered = filtered.filter(p => String(p.saleType) === String(saleTypeFilter));
+
+         // Plan name substring search (title + titleDetails)
+         if (salesPlanTerm) {
+             const term = norm(salesPlanTerm);
+             filtered = filtered.filter(p => norm(`${p.title || ''}${p.titleDetails || ''}`).includes(term));
+         }
+
+         // If price provided, prefer closest by absolute difference
+         if (priceTerm != null && filtered.length > 1) {
+             // Keep all, but sort by proximity so first item is best
+             filtered = filtered
+                 .map(p => ({ p, diff: Math.abs(Number(p.basePrice || 0) - priceTerm) }))
+                 .sort((a, b) => a.diff - b.diff)
+                 .map(x => x.p);
+         }
+
+         // 4) Decide behavior and possibly render chooser
+         const plansToOffer = filtered.length ? filtered : plans; // if no match, offer all
+
+         // Only one? auto-select
+         if (plansToOffer.length === 1) {
+             const only = plansToOffer[0];
+             const priceStr = (only.basePrice != null) ? Number(only.basePrice).toLocaleString('fa-IR') : '';
+             updateLiveConsole({ plan: only.title || '', price: priceStr, status: `طرح انتخاب شد: ${only.title || ''}` }, `طرح انتخاب شد: ${only.title || ''} | قیمت: ${priceStr}`);
+             return only;
+         }
+
+         // Multiple: render a selection dialog under process-status
+         return await new Promise((resolve) => {
+             const host = contentAreaContainer || document.body;
+             // Remove any previous chooser cards
+             host.querySelectorAll('.saipa-bot-card.saipa-plan-chooser').forEach(el => el.remove());
+             const card = document.createElement('div');
+             card.className = 'saipa-bot-card saipa-plan-chooser';
+             card.innerHTML = `<h3 style=\"margin:0; text-align:center; color: var(--dark-primary)\">انتخاب طرح فروش</h3>`;
+
+             const grid = document.createElement('div');
+             grid.className = 'saipa-product-selection-container';
+
+             plansToOffer.forEach(plan => {
+                 const title = `${plan.title || ''} ${plan.titleDetails || ''}`.trim();
+                 const priceStr = (plan.basePrice != null) ? Number(plan.basePrice).toLocaleString('fa-IR') : '-';
+
+                 const planCard = document.createElement('div');
+                 planCard.className = 'saipa-product-card';
+
+                 const titleDiv = document.createElement('div');
+                 titleDiv.className = 'saipa-product-card-title';
+                 titleDiv.textContent = title;
+
+                 const detailsDiv = document.createElement('div');
+                 detailsDiv.style.padding = '0 10px 12px 10px';
+                 detailsDiv.style.color = 'var(--dark-text)';
+                 detailsDiv.style.fontSize = '0.95em';
+                 detailsDiv.innerHTML = `<div style=\"margin-top:4px; color: var(--dark-text-muted)\">قیمت: <strong style=\"color: var(--dark-text)\">${priceStr}</strong></div>`;
+
+                 const selectBtn = document.createElement('button');
+                 selectBtn.className = 'saipa-bot-button saipa-bot-button-submit';
+                 selectBtn.style.setProperty('width', '90%', 'important');
+                 selectBtn.style.margin = '0 0 12px 0';
+                 selectBtn.textContent = 'انتخاب';
+                 selectBtn.addEventListener('click', (e) => {
+                     e.stopPropagation();
+                     const priceLog = (plan.basePrice != null) ? Number(plan.basePrice).toLocaleString('fa-IR') : '';
+                     updateLiveConsole({ plan: title, price: priceLog, status: `طرح انتخاب شد: ${title}` }, `طرح انتخاب شد: ${title} | قیمت: ${priceLog}`);
+                     card.remove();
+                     resolve(plan);
+                 });
+
+                 planCard.appendChild(titleDiv);
+                 planCard.appendChild(detailsDiv);
+                 planCard.appendChild(selectBtn);
+                 planCard.addEventListener('click', () => selectBtn.click());
+                 grid.appendChild(planCard);
+             });
+
+             card.appendChild(grid);
+             const anchor = document.getElementById('process-status');
+             if (anchor && anchor.parentElement) anchor.parentElement.insertBefore(card, anchor.nextSibling); else host.appendChild(card);
+         });
+     }
+
     async function fetchData(carModelId, salesPlanTerm = "", priceTerm = null, saleTypeFilter = "", specificCity = "", provinceId = 4) {
         while (true) {
             try {
@@ -1611,56 +1728,11 @@
                     if (provinceName) updateLiveConsole({ province: provinceName });
                 } catch (e) {}
                 updateLiveConsole({ status: 'دریافت طرح‌های فروش' }, 'در حال دریافت طرح‌های فروش');
-                let result = null;
-                while (result === null) {
-                    const url = `${circulationApiUrl}?carModelId=${carModelId}`;
-                    const response = await fetch(url);
-                    if (!response.ok) throw new Error(`خطای شبکه در دریافت طرح فروش: ${response.statusText}`);
-                    const data = await response.json();
-
-                    if (!data?.data?.length) {
-                        updateProcessStatus("هیچ طرح فعالی یافت نشد. تلاش مجدد...", true);
-                        updateLiveConsole({ status: 'طرح فعال یافت نشد' }, 'طرح فعال یافت نشد، تلاش مجدد');
-                        await new Promise(resolve => setTimeout(resolve, 5000));
-                        continue;
-                    }
-
-                    let plans = data.data;
-                    if (saleTypeFilter) {
-                        plans = plans.filter(plan => plan.saleType === saleTypeFilter);
-                    }
-
-                    let foundPlan = null;
-                    if (plans && plans.length > 0) {
-                        if (salesPlanTerm) {
-                            foundPlan = plans.find(plan =>
-                                (plan.title?.toLowerCase() + plan.titleDetails?.toLowerCase())
-                                .includes(salesPlanTerm.toLowerCase())
-                            );
-                        } else if (priceTerm) {
-                            foundPlan = plans.reduce((best, current) => {
-                                const bestDiff = Math.abs(Number(best.basePrice || 0) - priceTerm);
-                                const currentDiff = Math.abs(Number(current.basePrice || 0) - priceTerm);
-                                return currentDiff < bestDiff ? current : best;
-                            });
-                        } else {
-                            foundPlan = plans[0];
-                        }
-                    }
-
-                    if (foundPlan) {
-                        updateProcessStatus(`طرح "${foundPlan.title}" با قیمت ${foundPlan.basePrice} انتخاب شد.`);
-                        const formattedPrice = (foundPlan.basePrice !== undefined && foundPlan.basePrice !== null)
-                            ? Number(foundPlan.basePrice).toLocaleString('fa-IR')
-                            : '';
-                        updateLiveConsole({ plan: foundPlan.title, price: formattedPrice, status: `طرح انتخاب شد: ${foundPlan.title}` }, `طرح انتخاب شد: ${foundPlan.title} | قیمت: ${formattedPrice}`);
-                        result = foundPlan;
-                    } else {
-                        updateProcessStatus(`طرح "${salesPlanTerm || 'مناسب'}" یافت نشد. تلاش مجدد...`, true);
-                        updateLiveConsole({}, `طرح موردنظر یافت نشد، تلاش مجدد...`);
-                        await new Promise(resolve => setTimeout(resolve, 3000));
-                    }
-                }
+                const result = await selectSalesPlanForModel(
+                    carModelId,
+                    salesPlanTerm,
+                    { saleType: saleTypeFilter, priceTerm, city: specificCity, provinceId }
+                );
 
                 const checkedIds = result.options.filter(o => o.isChecked).map(o => o.id);
                 let selectedBranch = null;

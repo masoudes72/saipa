@@ -1367,6 +1367,10 @@
                 const newSelect = buildPresetDropdown();
                 newSelect.style.flex = '1 1 auto';
                 presetRow.replaceChild(newSelect, currentSelect);
+                // Immediately select the saved preset and update summary/fields
+                newSelect.value = name;
+                applyPresetToForm(preset);
+                renderPresetSummary(preset);
                 presetEditor.style.display = 'none';
             });
         }
@@ -1387,6 +1391,11 @@
             const newSelect = buildPresetDropdown();
             newSelect.style.flex = '1 1 auto';
             presetRow.replaceChild(newSelect, selectEl);
+            // Update summary to current selection or empty
+            const presetsNow = loadPresets();
+            const sel = presetsNow.find(p => p.name === newSelect.value);
+            if (sel) { applyPresetToForm(sel); renderPresetSummary(sel); }
+            else { renderPresetSummary(null); }
         });
 
         // Set selected preset as default
@@ -1422,8 +1431,8 @@
         const presetDd = searchAreaDiv.querySelector('#preset-select');
         if (presetDd) {
             presetDd.addEventListener('change', (e) => {
-                const presets = loadPresets();
-                const sel = presets.find(p => p.name === e.target.value);
+                const presetsNow = loadPresets();
+                const sel = presetsNow.find(p => p.name === e.target.value);
                 applyPresetToForm(sel);
                 renderPresetSummary(sel);
             });

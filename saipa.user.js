@@ -1901,7 +1901,7 @@
                 const bankUrl = respomsegeturl.data.bankUrl;
                 showBankLink(bankUrl);
                 updateLiveConsole({ status: 'لینک بانک دریافت شد' }, 'لینک بانک دریافت شد');
-                window.open(bankUrl, "_blank");
+                openInNewTab(bankUrl);
                 return true;
             }
             if (respomsegeturl?.data?.url) {
@@ -1909,7 +1909,7 @@
                 updateProcessStatus('لینک رزرو دریافت شد.');
                 updateLiveConsole({ status: 'لینک رزرو دریافت شد' }, 'لینک رزرو دریافت شد');
                 showBankLink(bankUrl);
-                window.open(bankUrl, "_blank");
+                openInNewTab(bankUrl);
             }
             return true; // Indicate success
         } catch (error) {
@@ -1933,7 +1933,7 @@
             if (loopData?.errorDescription) throw new Error(loopData.errorDescription);
             if (loopData?.data?.nextPageUrl) {
                 updateProcessStatus("انتقال به درگاه پرداخت...");
-                window.location.href = loopData.data.nextPageUrl;
+                openInNewTab(loopData.data.nextPageUrl);
                 return;
             }
             if (loopData?.data?.activeOrderId) return;
@@ -2085,8 +2085,16 @@
         `;
         host.appendChild(toast);
         const openBtn = toast.querySelector('#saipa-bank-open-btn');
-        if (openBtn) openBtn.addEventListener('click', () => window.open(bankUrl, '_blank'));
+        if (openBtn) openBtn.addEventListener('click', () => openInNewTab(bankUrl));
         _saipaBankShown = true;
+    }
+
+    function openInNewTab(url) {
+        try {
+            if (typeof GM_openInTab === 'function') { GM_openInTab(url, { active: true, insert: true }); return; }
+        } catch (e) {}
+        const w = window.open(url, '_blank', 'noopener');
+        if (w) { try { w.opener = null; } catch (e) {} }
     }
 
     function initialize() {

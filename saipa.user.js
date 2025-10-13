@@ -89,9 +89,10 @@
             border: 2px solid var(--dark-primary);
         }
         .saipa-bot-header-title {
-            font-size: 1.2em;
+            font-size: 1.25em;
             font-weight: 700;
-            text-shadow: 0 0 5px var(--dark-primary-glow);
+            letter-spacing: 0.8px;
+            text-shadow: 0 0 6px var(--dark-primary-glow);
         }
         .header-left-panel, .header-right-panel {
              display: flex;
@@ -100,13 +101,14 @@
         }
         #saipa-bot-header-time, #saipa-bot-header-user {
              font-family: 'monospace';
-             font-size: 0.9em;
+             font-size: 0.85em;
              background-color: var(--dark-surface);
-             padding: 5px 10px;
+             padding: 4px 8px;
              border-radius: 6px;
              border: 1px solid var(--dark-border);
              color: var(--dark-text-muted);
         }
+        .header-user-time-stack { display:flex; flex-direction: column; gap: 4px; align-items: flex-end; }
 
         /* Content area styles */
         .saipa-bot-content-area {
@@ -280,28 +282,30 @@
             top: 25px !important;
             right: 25px !important;
             width: auto !important;
-            height: 45px !important;
+            height: 42px !important;
             padding: 0 20px !important;
             display: flex !important;
             align-items: center !important;
             gap: 10px !important;
             color: var(--dark-text) !important;
-            background: var(--dark-primary) !important;
-            border-radius: 28px !important;
+            background: var(--dark-surface) !important;
+            border-radius: var(--dark-radius) !important;
             cursor: pointer !important;
             z-index: 10001 !important;
-            border: none !important;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3) !important;
+            border: 1px solid var(--dark-border) !important;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.25) !important;
             transition: var(--dark-transition) !important;
         }
         #saipa-bot-toggle-button-new:hover {
-            background: var(--dark-secondary) !important;
+            background: var(--dark-surface) !important;
+            border-color: var(--dark-primary) !important;
             transform: translateY(-2px) !important;
+            box-shadow: 0 0 18px var(--dark-primary-glow) !important;
         }
         #saipa-bot-toggle-button-new svg {
             width: 24px !important;
             height: 24px !important;
-            fill: white !important;
+            fill: var(--dark-text) !important;
         }
 
         /* Action Buttons */
@@ -389,6 +393,42 @@
             font-weight: 600;
             font-size: 1em;
             color: var(--dark-text);
+        }
+
+        /* Center circular logo badge */
+        .saipa-logo-badge {
+            position: absolute;
+            top: -12px; /* keep fully inside viewport */
+            left: 50%;
+            transform: translateX(-50%);
+            width: 116px;
+            height: 116px;
+            border-radius: 50%;
+            background: var(--dark-bg);
+            border: 3px solid var(--dark-border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow:
+              0 10px 24px rgba(0,0,0,0.55),
+              inset 0 2px 8px rgba(255,255,255,0.06),
+              inset 0 -6px 14px rgba(0,0,0,0.6);
+            z-index: 10002;
+        }
+        .saipa-logo-badge img {
+            width: 104px;
+            height: 104px;
+            object-fit: cover;
+            border-radius: 50%;
+            box-shadow: inset 0 4px 12px rgba(0,0,0,0.5);
+        }
+        /* Give panel some top padding so header doesn't clash with badge */
+        .saipa-bot-container { padding-top: 72px !important; overflow: visible !important; }
+
+        @media (max-width: 600px) {
+            .saipa-logo-badge { width: 96px; height: 96px; top: -10px; }
+            .saipa-logo-badge img { width: 86px; height: 86px; }
+            .saipa-bot-container { padding-top: 60px !important; }
         }
     `;
     const styleSheet = document.createElement("style");
@@ -624,7 +664,9 @@
         const leftPanel = document.createElement('div');
         leftPanel.className = 'header-left-panel';
 
-        if (logoBase64 && !logoBase64.includes("PASTE")) {
+        // If top circular badge exists, don't render logo in header-left again
+        const hasTopBadge = container.querySelector('.saipa-logo-badge');
+        if (!hasTopBadge && logoBase64 && !logoBase64.includes("PASTE")) {
             const logoImg = document.createElement('img');
             logoImg.src = logoBase64;
             logoImg.classList.add('saipa-bot-logo-img');
@@ -633,7 +675,7 @@
 
         const titleSpan = document.createElement('span');
         titleSpan.className = 'saipa-bot-header-title';
-        titleSpan.textContent = 'اتوماسیون سایپا';
+        titleSpan.textContent = 'ویونا بات - سایپا';
         leftPanel.appendChild(titleSpan);
 
 
@@ -645,8 +687,11 @@
         const timeSpan = document.createElement('span');
         timeSpan.id = 'saipa-bot-header-time';
 
-        rightPanel.appendChild(userSpan);
-        rightPanel.appendChild(timeSpan);
+        const userTimeStack = document.createElement('div');
+        userTimeStack.className = 'header-user-time-stack';
+        userTimeStack.appendChild(userSpan);
+        userTimeStack.appendChild(timeSpan);
+        rightPanel.appendChild(userTimeStack);
 
         headerDiv.appendChild(leftPanel);
         headerDiv.appendChild(rightPanel);
@@ -700,6 +745,16 @@
         if (existingContainer) { existingContainer.remove(); }
         const containerDiv = document.createElement('div');
         containerDiv.classList.add('saipa-bot-container');
+        // Add top-centered circular logo badge
+        const logoBadge = document.createElement('div');
+        logoBadge.className = 'saipa-logo-badge';
+        const logoImg = document.createElement('img');
+        // Use provided external URL (preferred), fallback to base64 if provided, else use default
+        const preferredUrl = 'https://i.imghippo.com/files/gXIf9778QLA.png';
+        const fallbackLogo = (logoBase64 && !logoBase64.includes('PASTE')) ? logoBase64 : 'https://raw.githubusercontent.com/viiona/assets/main/viiona-bot-badge.png';
+        logoImg.src = preferredUrl || fallbackLogo;
+        logoBadge.appendChild(logoImg);
+        containerDiv.appendChild(logoBadge);
         contentAreaContainer = document.createElement('div');
         contentAreaContainer.classList.add('saipa-bot-content-area');
         containerDiv.appendChild(contentAreaContainer);
@@ -1879,6 +1934,7 @@
         mainContainer = createMainContainer();
         setupHeader(mainContainer);
         initLiveConsole();
+        setupPanelSettingsMenu();
         reloadContent();
         setupFloatingButtons();
     }
@@ -1902,32 +1958,7 @@
         });
         document.body.appendChild(panelToggleButton);
 
-        // 2. Action Buttons (Right Side)
-        const actionButtons = [
-            { title: 'دریافت بروزرسانی', icon: `<path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>`, onClick: () => { window.open('https://github.com/masoudes72/saipa/raw/refs/heads/main/saipa.user.js', '_blank'); }, class: 'saipa-button-new-update' },
-            { title: 'کپچای خودکار', icon: ``, onClick: toggleAutoCaptcha, class: 'saipa-button-new-captcha', isCaptcha: true },
-            { title: 'پاک کردن کوکی‌ها', icon: `<path d="M6,19c0,1.1,0.9,2,2,2h8c1.1,0,2-0.9,2-2V7H6V19z M19,4h-3.5l-1-1h-5l-1-1H5v2h14V4z"/>`, onClick: clearSiteCookies, class: 'saipa-button-new-clear' },
-            { title: 'بارگذاری مجدد', icon: `<path d="M17.65,6.35C16.2,4.9,14.21,4,12,4c-4.42,0-7.99,3.58-7.99,8s3.57,8,7.99,8c3.73,0,6.84-2.55,7.73-6h-2.08 c-0.82,2.33-3.04,4-5.65,4c-3.31,0-6-2.69-6-6s2.69-6,6-6c1.66,0,3.14,0.69,4.22,1.78L13,11h7V4L17.65,6.35z"/>`, onClick: reloadContent, class: 'saipa-button-new-reload' },
-        ];
-
-        actionButtons.forEach(def => {
-            const button = document.createElement('button');
-            button.className = `saipa-action-button ${def.class}`;
-            button.title = def.title;
-            button.addEventListener('click', def.onClick);
-
-            const svg = document.createElementNS(svgNS, "svg");
-            svg.setAttribute("viewBox", "0 0 24 24");
-            if (def.icon) svg.innerHTML = def.icon;
-            button.appendChild(svg);
-
-            if (def.isCaptcha) {
-                updateCaptchaButtonState(button, svg);
-            }
-
-            document.body.appendChild(button);
-            floatingButtons.push(button);
-        });
+        // 2. No side action buttons anymore (moved inside the panel)
 
         // If panel is initially visible, ensure buttons are behind
         const isPanelVisible = window.getComputedStyle(document.querySelector('.saipa-bot-container')).display !== 'none';
@@ -1972,6 +2003,64 @@
         }
         alert('کوکی‌ها پاک شدند. صفحه مجددا بارگذاری می‌شود.');
         window.location.reload();
+    }
+
+    function setupPanelSettingsMenu() {
+        const container = document.querySelector('.saipa-bot-container');
+        if (!container) return;
+        const header = container.querySelector('.saipa-bot-header');
+        const rightPanel = container.querySelector('.header-right-panel');
+
+        const toggleBtn = document.createElement('button');
+        toggleBtn.id = 'saipa-panel-settings-toggle';
+        toggleBtn.type = 'button';
+        toggleBtn.className = 'saipa-bot-button saipa-bot-button-secondary';
+        toggleBtn.textContent = 'تنظیمات';
+        toggleBtn.style.setProperty('width', 'auto', 'important');
+        if (rightPanel) rightPanel.appendChild(toggleBtn);
+
+        // Settings group lives directly under header so it persists across content changes
+        const group = document.createElement('div');
+        group.id = 'saipa-panel-settings-group';
+        group.className = 'saipa-bot-card';
+        group.style.display = 'none';
+        group.style.flexDirection = 'row';
+        group.style.gap = '10px';
+
+        function makeBtn(label, onclick, extraClasses) {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = `saipa-bot-button ${extraClasses || 'saipa-bot-button-secondary'}`;
+            b.textContent = label;
+            b.style.setProperty('width', 'auto', 'important');
+            b.addEventListener('click', onclick);
+            return b;
+        }
+
+        const updateBtn = makeBtn('بروزرسانی', () => window.open('https://github.com/masoudes72/saipa/raw/refs/heads/main/saipa.user.js', '_blank'));
+        const captchaBtn = makeBtn('کپچای خودکار', () => {
+            toggleAutoCaptcha();
+            // reflect state in label
+            captchaBtn.textContent = `کپچای خودکار${isAutoCaptchaEnabled ? ' (روشن)' : ' (خاموش)'}`;
+        });
+        const clearBtn = makeBtn('حذف کوکی‌ها', clearSiteCookies, 'saipa-bot-button-secondary');
+        const reloadBtn = makeBtn('بارگذاری مجدد', reloadContent, 'saipa-bot-button-submit');
+
+        group.appendChild(updateBtn);
+        group.appendChild(captchaBtn);
+        group.appendChild(clearBtn);
+        group.appendChild(reloadBtn);
+
+        // insert group after header
+        if (header && header.parentElement === container) {
+            if (header.nextSibling) container.insertBefore(group, header.nextSibling); else container.appendChild(group);
+        } else {
+            container.appendChild(group);
+        }
+
+        toggleBtn.addEventListener('click', () => {
+            group.style.display = group.style.display === 'none' ? 'flex' : 'none';
+        });
     }
 
     initialize();

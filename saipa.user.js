@@ -1249,13 +1249,19 @@
             const provId = Number(p.provinceId || 4);
             const prov = provinces.find(pr => Number(pr.id) === provId);
             const provinceName = prov ? prov.name : String(provId);
+            // Format price with thousands separators for readability
+            let priceDisplay = '';
+            if (p.priceTerm != null && p.priceTerm !== '') {
+                const raw = String(p.priceTerm).replace(/,/g, '');
+                priceDisplay = raw && !isNaN(raw) ? Number(raw).toLocaleString('en-US') : String(p.priceTerm);
+            }
             presetSummary.innerHTML = `
-                <h3 style="margin:0;text-align:center;color:var(--dark-primary)">پریست انتخاب‌شده: ${p.name}</h3>
+                <h3 style="margin:0;text-align:center;color: var(--dark-primary)">پریست انتخاب‌شده: ${p.name}</h3>
                 <div style="display:grid;grid-template-columns:120px 1fr;gap:8px;">
                   <div style="color:var(--dark-text-muted)">استان</div><div>${provinceName}</div>
                   <div style="color:var(--dark-text-muted)">نام خودرو</div><div>${p.searchTerm || ''}</div>
                   <div style="color:var(--dark-text-muted)">طرح فروش</div><div>${p.salesPlanTerm || ''}</div>
-                  <div style="color:var(--dark-text-muted)">قیمت</div><div>${p.priceTerm || ''}</div>
+                  <div style="color:var(--dark-text-muted)">قیمت</div><div>${priceDisplay}</div>
                   <div style="color:var(--dark-text-muted)">شهر</div><div>${p.city || ''}</div>
                   <div style="color:var(--dark-text-muted)">نوع فروش</div><div>${p.saleType || ''}</div>
                   <div style="color:var(--dark-text-muted)">دقیق</div><div>${p.exactMatch ? 'بله' : 'خیر'}</div>
@@ -1311,6 +1317,18 @@
                 e.target.value = '';
             }
         });
+        // Format price in preset editor with thousands separators
+        const editorPriceInput = searchAreaDiv.querySelector('#editor-price-term-input');
+        if (editorPriceInput) {
+            editorPriceInput.addEventListener('input', (e) => {
+                let value = String(e.target.value || '').replace(/,/g, '');
+                if (value && !isNaN(value)) {
+                    e.target.value = Number(value).toLocaleString('en-US');
+                } else {
+                    e.target.value = '';
+                }
+            });
+        }
 
         // New preset: toggle editor
         newPresetBtn.addEventListener('click', () => {

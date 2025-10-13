@@ -1032,7 +1032,7 @@
         deletePresetBtn.style.setProperty('width', 'auto', 'important');
         const setDefaultBtn = document.createElement('button');
         setDefaultBtn.type = 'button';
-        setDefaultBtn.textContent = 'ثبت به عنوان پیش‌فرض';
+        setDefaultBtn.textContent = 'پیش‌فرض';
         setDefaultBtn.className = 'saipa-bot-button saipa-bot-button-secondary';
         setDefaultBtn.style.setProperty('width', 'auto', 'important');
 
@@ -1977,3 +1977,4 @@
     initialize();
 
 })();
+

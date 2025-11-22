@@ -25,6 +25,187 @@
     // --- Global State for Auto-Captcha ---
     let isAutoCaptchaEnabled = GM_getValue('autoCaptchaEnabled', true);
 
+    // --- Global State for Captcha Cache ---
+    let isCaptchaCacheEnabled = GM_getValue('captchaCacheEnabled', false);
+
+    // --- Captcha Cache Manager ---
+    class CaptchaCacheManager {
+        constructor() {
+            this.queue = []; // Array of {image, tokenid, solvedText, createdAt, expiresAt}
+            this.fetchInterval = null;
+            this.cleanupInterval = null;
+            this.counterUpdateInterval = null;
+            this.isActive = false;
+            this.MAX_CAPTCHAS = 10; // Maximum number of captchas in queue
+        }
+
+        async start() {
+            if (this.isActive) return;
+            this.isActive = true;
+            console.log('Captcha Cache Manager: Started');
+
+            // Fetch first captcha immediately
+            await this.fetchAndSolveCaptcha();
+
+            // Fetch new captcha every 2 seconds
+            this.fetchInterval = setInterval(async () => {
+                await this.fetchAndSolveCaptcha();
+            }, 2000);
+
+            // Cleanup expired captchas every 5 seconds
+            this.cleanupInterval = setInterval(() => {
+                this.cleanupExpired();
+            }, 5000);
+
+            // Update counter every second
+            this.counterUpdateInterval = setInterval(() => {
+                updateCaptchaCounter();
+            }, 1000);
+
+            // Initial counter update
+            updateCaptchaCounter();
+        }
+
+        stop() {
+            if (!this.isActive) return;
+            this.isActive = false;
+            console.log('Captcha Cache Manager: Stopped');
+
+            if (this.fetchInterval) {
+                clearInterval(this.fetchInterval);
+                this.fetchInterval = null;
+            }
+
+            if (this.cleanupInterval) {
+                clearInterval(this.cleanupInterval);
+                this.cleanupInterval = null;
+            }
+
+            if (this.counterUpdateInterval) {
+                clearInterval(this.counterUpdateInterval);
+                this.counterUpdateInterval = null;
+            }
+
+            // Clear queue
+            this.queue = [];
+            // Update counter display
+            updateCaptchaCounter();
+        }
+
+        async fetchAndSolveCaptcha() {
+            try {
+                const visitorId = Math.random();
+                const apiUrl = `https://recaptchag.iranecar.com/api/Captcha/GetCaptchaImage2?visitorId=${visitorId}`;
+                const response = await fetch(apiUrl, { method: 'GET' });
+
+                if (!response.ok) {
+                    throw new Error(response.statusText);
+                }
+
+                const tokenId = response.headers.get('token-id');
+                const blob = await response.blob();
+                const imageUrl = URL.createObjectURL(blob);
+
+                // Solve captcha immediately
+                const solvedResult = await solveCaptcha(imageUrl);
+                if (!solvedResult || !solvedResult.text) {
+                    console.warn('Captcha Cache Manager: Failed to solve captcha');
+                    URL.revokeObjectURL(imageUrl);
+                    return;
+                }
+
+                const now = Date.now();
+                const captcha = {
+                    image: imageUrl,
+                    tokenid: tokenId,
+                    solvedText: solvedResult.text,
+                    createdAt: now,
+                    expiresAt: now + (110 * 1000), // 110 seconds validity
+                    used: false
+                };
+
+                // Remove oldest captcha if queue reaches maximum limit
+                if (this.queue.length >= this.MAX_CAPTCHAS) {
+                    const oldestCaptcha = this.queue.shift(); // Remove first (oldest) captcha
+                    if (oldestCaptcha && oldestCaptcha.image) {
+                        URL.revokeObjectURL(oldestCaptcha.image);
+                        console.log(`Captcha Cache Manager: Removed oldest captcha to maintain limit of ${this.MAX_CAPTCHAS}`);
+                    }
+                }
+
+                this.queue.push(captcha);
+                console.log(`Captcha Cache Manager: Added captcha to queue. Queue size: ${this.queue.length}`);
+                // Update counter display
+                updateCaptchaCounter();
+            } catch (error) {
+                console.error('Captcha Cache Manager: Error fetching captcha:', error);
+            }
+        }
+
+        cleanupExpired() {
+            const now = Date.now();
+            const beforeLength = this.queue.length;
+
+            this.queue = this.queue.filter(captcha => {
+                if (captcha.expiresAt <= now) {
+                    URL.revokeObjectURL(captcha.image);
+                    return false;
+                }
+                return true;
+            });
+
+            const removed = beforeLength - this.queue.length;
+            if (removed > 0) {
+                console.log(`Captcha Cache Manager: Removed ${removed} expired captcha(s). Queue size: ${this.queue.length}`);
+            }
+            // Update counter display
+            updateCaptchaCounter();
+        }
+
+        getCaptcha() {
+            // Find first unused and non-expired captcha
+            const now = Date.now();
+            const captcha = this.queue.find(c => !c.used && c.expiresAt > now);
+
+            if (captcha) {
+                captcha.used = true;
+                // Remove from queue immediately after use
+                const index = this.queue.indexOf(captcha);
+                if (index > -1) {
+                    this.queue.splice(index, 1);
+                    // Schedule cleanup of image URL after a short delay
+                    setTimeout(() => URL.revokeObjectURL(captcha.image), 1000);
+                }
+
+                console.log(`Captcha Cache Manager: Retrieved captcha from cache. Remaining: ${this.queue.length}`);
+                // Update counter display
+                updateCaptchaCounter();
+                return {
+                    image: captcha.image,
+                    tokenid: captcha.tokenid,
+                    solvedText: captcha.solvedText
+                };
+            }
+
+            return null;
+        }
+
+        getQueueSize() {
+            return this.queue.length;
+        }
+
+        getStatus() {
+            return {
+                isActive: this.isActive,
+                queueSize: this.queue.length,
+                nonExpiredCount: this.queue.filter(c => c.expiresAt > Date.now()).length
+            };
+        }
+    }
+
+    // Global captcha cache manager instance
+    const captchaCacheManager = new CaptchaCacheManager();
+
     // --- Start: Modern Dark/Glowing Styles ---
     const styles = `
         :root {
@@ -470,6 +651,34 @@
             border-radius: 50%;
             box-shadow: inset 0 4px 12px rgba(0,0,0,0.5);
         }
+        /* Captcha cache counter below logo */
+        .saipa-logo-captcha-counter {
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-top: 8px;
+            background: var(--dark-surface);
+            border: 1px solid var(--dark-border);
+            border-radius: 12px;
+            padding: 4px 10px;
+            font-size: 0.85em;
+            color: var(--dark-text);
+            white-space: nowrap;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            z-index: 10003;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .saipa-logo-captcha-counter.hidden {
+            display: none;
+        }
+        .saipa-logo-captcha-counter .counter-number {
+            font-weight: 700;
+            color: var(--dark-primary);
+            text-shadow: 0 0 6px var(--dark-primary-glow);
+        }
         /* Radial settings menu around logo */
         .saipa-logo-menu { position: absolute; top: 50%; left: 50%; width: 0; height: 0; }
         .saipa-logo-menu .logo-action {
@@ -491,11 +700,13 @@
         .saipa-logo-menu .pos-right  { transform: translate(-50%, -50%) translate(92px, 0) scale(1); }
         .saipa-logo-menu .pos-bottom { transform: translate(-50%, -50%) translate(0, 92px) scale(1); }
         .saipa-logo-menu .pos-left   { transform: translate(-50%, -50%) translate(-92px, 0) scale(1); }
+        .saipa-logo-menu .pos-bottom-left { transform: translate(-50%, -50%) translate(-65px, 65px) scale(1); }
         @media (max-width: 600px) {
             .saipa-logo-menu .pos-top    { transform: translate(-50%, -50%) translate(0, -78px) scale(1); }
             .saipa-logo-menu .pos-right  { transform: translate(-50%, -50%) translate(78px, 0) scale(1); }
             .saipa-logo-menu .pos-bottom { transform: translate(-50%, -50%) translate(0, 78px) scale(1); }
             .saipa-logo-menu .pos-left   { transform: translate(-50%, -50%) translate(-78px, 0) scale(1); }
+            .saipa-logo-menu .pos-bottom-left { transform: translate(-50%, -50%) translate(-55px, 55px) scale(1); }
         }
         /* Give panel some top padding so header doesn't clash with badge */
         .saipa-bot-container { padding-top: 72px !important; overflow: visible !important; }
@@ -815,6 +1026,30 @@
     let isSearching = false;
     let floatingButtons = [];
 
+    // Function to update captcha counter display
+    function updateCaptchaCounter() {
+        const counter = document.getElementById('saipa-captcha-counter');
+        if (!counter) return;
+
+        if (!isCaptchaCacheEnabled || !captchaCacheManager.isActive) {
+            counter.classList.add('hidden');
+            return;
+        }
+
+        const now = Date.now();
+        const validCount = captchaCacheManager.queue.filter(c => !c.used && c.expiresAt > now).length;
+        const counterNumber = counter.querySelector('.counter-number');
+
+        if (validCount > 0) {
+            counter.classList.remove('hidden');
+            if (counterNumber) {
+                counterNumber.textContent = validCount;
+            }
+        } else {
+            counter.classList.add('hidden');
+        }
+    }
+
     function createMainContainer() {
         const existingContainer = document.querySelector('.saipa-bot-container');
         if (existingContainer) { existingContainer.remove(); }
@@ -843,16 +1078,26 @@
         const actionUpdate = makeLogoAction('بروزرسانی', () => window.open('https://github.com/masoudes72/saipa/raw/refs/heads/main/saipa.user.js', '_blank'), 'pos-right');
         const actionReload = makeLogoAction('ریلود', () => reloadContent(), 'pos-top');
         const actionCaptcha = makeLogoAction('کپچا', () => toggleAutoCaptcha(), 'pos-bottom');
+        const actionCaptchaCache = makeLogoAction('کش کپچا', () => toggleCaptchaCache(), 'pos-bottom-left');
         const actionClear = makeLogoAction('حذف', () => clearSiteCookies(), 'pos-left');
         logoMenu.appendChild(actionUpdate);
         logoMenu.appendChild(actionReload);
         logoMenu.appendChild(actionCaptcha);
+        logoMenu.appendChild(actionCaptchaCache);
         logoMenu.appendChild(actionClear);
         logoBadge.appendChild(logoMenu);
         logoBadge.addEventListener('click', (e) => {
             e.stopPropagation();
             logoBadge.classList.toggle('menu-open');
         });
+
+        // Add captcha cache counter below logo
+        const captchaCounter = document.createElement('div');
+        captchaCounter.className = 'saipa-logo-captcha-counter hidden';
+        captchaCounter.id = 'saipa-captcha-counter';
+        captchaCounter.innerHTML = '<span>کپچای معتبر:</span><span class="counter-number">0</span>';
+        logoBadge.appendChild(captchaCounter);
+
         containerDiv.appendChild(logoBadge);
         contentAreaContainer = document.createElement('div');
         contentAreaContainer.classList.add('saipa-bot-content-area');
@@ -883,6 +1128,19 @@
     }
 
     async function fetchCaptchasstep2() {
+        // Check if cache is enabled and has captchas available
+        if (isCaptchaCacheEnabled && captchaCacheManager.isActive) {
+            const cachedCaptcha = captchaCacheManager.getCaptcha();
+            if (cachedCaptcha) {
+                return {
+                    image: cachedCaptcha.image,
+                    tokenid: cachedCaptcha.tokenid,
+                    solvedText: cachedCaptcha.solvedText
+                };
+            }
+        }
+
+        // Fallback to normal fetching if cache is empty or disabled
         try {
             const visitorId = Math.random();
             const apiUrl = `https://recaptchag.iranecar.com/api/Captcha/GetCaptchaImage2?visitorId=${visitorId}`;
@@ -1912,9 +2170,13 @@
             appendConsoleLog('دریافت کپچای ثبت');
             const captchaReg = await fetchCaptchasstep2();
             if (!captchaReg) throw new Error("دریافت کپچای ثبت ناموفق بود.");
-            const solvedCaptchaText = isAutoCaptchaEnabled
-                ? (await solveCaptcha(captchaReg.image))?.text
-                : await getManualCaptchaInput(captchaReg.image);
+            // Use cached solved text if available, otherwise solve or get manual input
+            let solvedCaptchaText = captchaReg.solvedText;
+            if (!solvedCaptchaText) {
+                solvedCaptchaText = isAutoCaptchaEnabled
+                    ? (await solveCaptcha(captchaReg.image))?.text
+                    : await getManualCaptchaInput(captchaReg.image);
+            }
             if (!solvedCaptchaText) throw new Error("حل کپچا ناموفق بود.");
 
             updateProcessStatus('ثبت اولیه...');
@@ -1937,8 +2199,15 @@
             const captcha2 = await fetchCaptchasstep2();
             if (!captcha1 || !captcha2) throw new Error("کپچای نهایی ناموفق.");
 
-            const solvedCaptcha1Text = isAutoCaptchaEnabled ? (await solveCaptcha(captcha1.image))?.text : await getManualCaptchaInput(captcha1.image, "کپچای اول");
-            const solvedCaptcha2Text = isAutoCaptchaEnabled ? (await solveCaptcha(captcha2.image))?.text : await getManualCaptchaInput(captcha2.image, "کپچای دوم");
+            // Use cached solved text if available, otherwise solve or get manual input
+            let solvedCaptcha1Text = captcha1.solvedText;
+            if (!solvedCaptcha1Text) {
+                solvedCaptcha1Text = isAutoCaptchaEnabled ? (await solveCaptcha(captcha1.image))?.text : await getManualCaptchaInput(captcha1.image, "کپچای اول");
+            }
+            let solvedCaptcha2Text = captcha2.solvedText;
+            if (!solvedCaptcha2Text) {
+                solvedCaptcha2Text = isAutoCaptchaEnabled ? (await solveCaptcha(captcha2.image))?.text : await getManualCaptchaInput(captcha2.image, "کپچای دوم");
+            }
             if (!solvedCaptcha1Text || !solvedCaptcha2Text) throw new Error("حل کپچای نهایی ناموفق.");
 
             updateProcessStatus('ارسال تایید نهایی...');
@@ -2168,6 +2437,13 @@
         setupFloatingButtons();
         try { setupSigninAutofillButton(); } catch (e) {}
         try { setupBankResultCapture(); } catch (e) {}
+
+        // Start captcha cache if it was enabled before
+        if (isCaptchaCacheEnabled) {
+            captchaCacheManager.start();
+        }
+        // Initial counter update
+        updateCaptchaCounter();
     }
 
     function setupFloatingButtons() {
@@ -2229,6 +2505,21 @@
         const btn = document.querySelector('.saipa-button-new-captcha');
         const svg = btn.querySelector('svg');
         updateCaptchaButtonState(btn, svg);
+    }
+
+    function toggleCaptchaCache() {
+        isCaptchaCacheEnabled = !isCaptchaCacheEnabled;
+        GM_setValue('captchaCacheEnabled', isCaptchaCacheEnabled);
+
+        if (isCaptchaCacheEnabled) {
+            captchaCacheManager.start();
+            updateCaptchaCounter();
+            alert(`سیستم کش کپچا فعال شد. هر ۲ ثانیه کپچای جدید دریافت و حل می‌شود.\nاعتبار هر کپچا: ۱۱۰ ثانیه`);
+        } else {
+            captchaCacheManager.stop();
+            updateCaptchaCounter();
+            alert(`سیستم کش کپچا غیرفعال شد.`);
+        }
     }
 
     function updateCaptchaButtonState(button, svg) {

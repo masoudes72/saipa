@@ -231,23 +231,25 @@
             flex-direction: column;
             gap: 0;
             position: fixed !important;
-            top: 15px !important;
-            left: 15px !important;
+            top: 50px !important; /* Moved down slightly */
+            left: 20px !important;
             width: 480px !important;
-            max-width: calc(100% - 30px) !important;
+            max-width: calc(100% - 40px) !important;
             height: auto !important;
-            max-height: calc(100vh - 30px);
+            max-height: calc(90vh - 50px);
             background: var(--dark-bg) !important;
             color: var(--dark-text) !important;
             border: 1px solid var(--dark-border) !important;
             padding: 0 !important;
+            /* Increased padding-top to avoid logo overlap */
+            padding-top: 120px !important;
             z-index: 10000 !important;
             border-radius: var(--dark-radius) !important;
             box-shadow: var(--dark-shadow) !important;
             font-family: 'Vazirmatn', sans-serif !important;
             backdrop-filter: blur(10px);
-            background: rgba(26, 27, 38, 0.85) !important;
-            overflow: hidden;
+            background: rgba(26, 27, 38, 0.95) !important;
+            overflow: visible !important; /* Allow logo to pop out */
         }
 
         /* Header Styling */
@@ -257,11 +259,14 @@
             color: var(--dark-text);
             padding: 12px 18px;
             border-bottom: 1px solid var(--dark-border);
+            border-top: 1px solid var(--dark-border); /* Add separator from logo area */
             display: flex;
             justify-content: space-between;
             align-items: center;
             box-sizing: border-box;
             flex-shrink: 0;
+            position: relative;
+            z-index: 2;
         }
         .saipa-bot-logo-img {
             height: 40px;
@@ -302,6 +307,8 @@
             align-items: center;
             gap: 20px;
             width: 100%;
+            box-sizing: border-box;
+            max-height: 60vh; /* Ensure inner scroll works */
         }
 
         /* General Card Styling */
@@ -627,7 +634,7 @@
         /* Center circular logo badge */
         .saipa-logo-badge {
             position: absolute;
-            top: -12px; /* keep fully inside viewport */
+            top: -12px; /* Intentionally protruding */
             left: 50%;
             transform: translateX(-50%);
             width: 116px;
@@ -654,15 +661,15 @@
         /* Captcha cache counter below logo */
         .saipa-logo-captcha-counter {
             position: absolute;
-            top: 100%;
+            top: 95%; /* Adjusted to not overlap too much */
             left: 50%;
             transform: translateX(-50%);
-            margin-top: 8px;
+            margin-top: 4px;
             background: var(--dark-surface);
             border: 1px solid var(--dark-border);
             border-radius: 12px;
-            padding: 4px 10px;
-            font-size: 0.85em;
+            padding: 2px 8px;
+            font-size: 0.8em;
             color: var(--dark-text);
             white-space: nowrap;
             box-shadow: 0 4px 12px rgba(0,0,0,0.4);
@@ -696,25 +703,25 @@
         .saipa-logo-badge { cursor: pointer; }
         .saipa-logo-badge:hover { box-shadow: 0 12px 28px rgba(0,0,0,0.6), inset 0 2px 10px rgba(255,255,255,0.07), inset 0 -8px 16px rgba(0,0,0,0.65); }
         .saipa-logo-menu .logo-action:hover { box-shadow: 0 0 12px var(--dark-primary-glow); }
-        .saipa-logo-menu .pos-top    { transform: translate(-50%, -50%) translate(0, -92px) scale(1); }
-        .saipa-logo-menu .pos-right  { transform: translate(-50%, -50%) translate(92px, 0) scale(1); }
-        .saipa-logo-menu .pos-bottom { transform: translate(-50%, -50%) translate(0, 92px) scale(1); }
-        .saipa-logo-menu .pos-left   { transform: translate(-50%, -50%) translate(-92px, 0) scale(1); }
-        .saipa-logo-menu .pos-bottom-left { transform: translate(-50%, -50%) translate(-65px, 65px) scale(1); }
-        @media (max-width: 600px) {
-            .saipa-logo-menu .pos-top    { transform: translate(-50%, -50%) translate(0, -78px) scale(1); }
-            .saipa-logo-menu .pos-right  { transform: translate(-50%, -50%) translate(78px, 0) scale(1); }
-            .saipa-logo-menu .pos-bottom { transform: translate(-50%, -50%) translate(0, 78px) scale(1); }
-            .saipa-logo-menu .pos-left   { transform: translate(-50%, -50%) translate(-78px, 0) scale(1); }
-            .saipa-logo-menu .pos-bottom-left { transform: translate(-50%, -50%) translate(-55px, 55px) scale(1); }
-        }
-        /* Give panel some top padding so header doesn't clash with badge */
-        .saipa-bot-container { padding-top: 72px !important; overflow: visible !important; }
 
+        /* Semi-circle arrangement at bottom: Left, Bottom-Left, Bottom-Right, Right */
+        .saipa-logo-menu .pos-1 { transform: translate(-50%, -50%) translate(-92px, 0) scale(1); }
+        .saipa-logo-menu .pos-2 { transform: translate(-50%, -50%) translate(-65px, 65px) scale(1); }
+        .saipa-logo-menu .pos-3 { transform: translate(-50%, -50%) translate(65px, 65px) scale(1); }
+        .saipa-logo-menu .pos-4 { transform: translate(-50%, -50%) translate(92px, 0) scale(1); }
+
+        @media (max-width: 600px) {
+            .saipa-logo-menu .pos-1 { transform: translate(-50%, -50%) translate(-78px, 0) scale(1); }
+            .saipa-logo-menu .pos-2 { transform: translate(-50%, -50%) translate(-55px, 55px) scale(1); }
+            .saipa-logo-menu .pos-3 { transform: translate(-50%, -50%) translate(55px, 55px) scale(1); }
+            .saipa-logo-menu .pos-4 { transform: translate(-50%, -50%) translate(78px, 0) scale(1); }
+        }
+
+        /* Mobile adjustments */
         @media (max-width: 600px) {
             .saipa-logo-badge { width: 96px; height: 96px; top: -10px; }
             .saipa-logo-badge img { width: 86px; height: 86px; }
-            .saipa-bot-container { padding-top: 60px !important; }
+            .saipa-bot-container { padding-top: 100px !important; top: 10px !important; left: 10px !important; max-width: calc(100% - 20px) !important; }
         }
     `;
     const styleSheet = document.createElement("style");
@@ -878,7 +885,13 @@
 
 /* 🔹 جلوگیری از هم‌پوشانی */
 .saipa-bot-container {
-  margin-bottom: 80px !important; /* فاصله از دکمه‌های پایین */
+  /* margin-bottom removed as it does not affect fixed top element correctly */
+}
+/* Ensure content scrolls above the buttons on mobile */
+@media (max-width: 768px) {
+  .saipa-bot-content-area {
+    padding-bottom: 80px !important;
+  }
 }
 `;
 
@@ -1075,16 +1088,15 @@
             btn.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
             return btn;
         }
-        const actionUpdate = makeLogoAction('بروزرسانی', () => window.open('https://github.com/masoudes72/saipa/raw/refs/heads/main/saipa.user.js', '_blank'), 'pos-right');
-        const actionReload = makeLogoAction('ریلود', () => reloadContent(), 'pos-top');
-        const actionCaptcha = makeLogoAction('کپچا', () => toggleAutoCaptcha(), 'pos-bottom');
-        const actionCaptchaCache = makeLogoAction('کش کپچا', () => toggleCaptchaCache(), 'pos-bottom-left');
-        const actionClear = makeLogoAction('حذف', () => clearSiteCookies(), 'pos-left');
-        logoMenu.appendChild(actionUpdate);
-        logoMenu.appendChild(actionReload);
-        logoMenu.appendChild(actionCaptcha);
-        logoMenu.appendChild(actionCaptchaCache);
+        const actionClear = makeLogoAction('حذف', () => clearSiteCookies(), 'pos-1');
+        const actionCaptchaCache = makeLogoAction('کش کپچا', () => toggleCaptchaCache(), 'pos-2');
+        const actionCaptcha = makeLogoAction('کپچا', () => toggleAutoCaptcha(), 'pos-3');
+        const actionUpdate = makeLogoAction('بروزرسانی', () => window.open('https://github.com/masoudes72/saipa/raw/refs/heads/main/saipa.user.js', '_blank'), 'pos-4');
+
         logoMenu.appendChild(actionClear);
+        logoMenu.appendChild(actionCaptchaCache);
+        logoMenu.appendChild(actionCaptcha);
+        logoMenu.appendChild(actionUpdate);
         logoBadge.appendChild(logoMenu);
         logoBadge.addEventListener('click', (e) => {
             e.stopPropagation();

@@ -893,6 +893,42 @@
     padding-bottom: 80px !important;
   }
 }
+
+/* دکمه شناور لینک بانک */
+.saipa-button-bank-link {
+    position: fixed !important;
+    bottom: 20px !important;
+    left: 20px !important;
+    width: auto !important;
+    height: 48px !important;
+    padding: 0 20px !important;
+    background: linear-gradient(to right, #00c853, #64dd17) !important;
+    color: white !important;
+    border-radius: 24px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    box-shadow: 0 5px 20px rgba(0,200,83,0.4) !important;
+    z-index: 100000 !important;
+    font-family: 'Vazirmatn', sans-serif !important;
+    font-weight: bold !important;
+    cursor: pointer !important;
+    border: none !important;
+    animation: pulse_green 2s infinite;
+}
+@keyframes pulse_green {
+    0% { box-shadow: 0 0 0 0 rgba(0, 200, 83, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(0, 200, 83, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(0, 200, 83, 0); }
+}
+@media (max-width: 600px) {
+    .saipa-button-bank-link {
+        bottom: 70px !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        width: max-content !important;
+    }
+}
 `;
 
     // inject responsive fix styles
@@ -2427,6 +2463,17 @@
         host.appendChild(toast);
         const openBtn = toast.querySelector('#saipa-bank-open-btn');
         if (openBtn) openBtn.addEventListener('click', () => openInNewTab(bankUrl));
+
+        // Add persistent floating button for bank link
+        if (!document.getElementById('saipa-bank-floating-btn')) {
+            const btn = document.createElement('button');
+            btn.id = 'saipa-bank-floating-btn';
+            btn.className = 'saipa-button-bank-link';
+            btn.innerHTML = '<svg style="width:24px;height:24px;fill:white;margin-left:5px;" viewBox="0 0 24 24"><path d="M12.5 6.9c1.7 0 3.4 0 5.1 0 .6.1 1.1.5 1.2 1.1.1.7-.3 1.4-1 1.6-.2.1-.4.1-.7.1-2.5 0-5 0-7.5 0-1 0-1.8.7-2 1.7-.1.6.2 1.2.8 1.5.2.1.5.2.7.2 1.7 0 3.4 0 5.1 0 .6 0 1.2.4 1.2.9 0 .6-.5 1.1-1.1 1.1H8.9c-.6 0-1.2-.5-1.2-1.1 0-.3.1-.6.3-.8.3-.3.7-.5 1.1-.5 1.6 0 3.1 0 4.7 0 .5 0 .9-.3 1-.7.1-.5-.2-1-.7-1.1-.1 0-.2 0-.4 0-2.1 0-4.3 0-6.4 0-.6 0-1.1-.5-1.2-1.1-.1-.7.3-1.4 1-1.6.2-.1.4-.1.7-.1 1.6 0 3.1 0 4.7 0zM4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2zm0 2v12h16V6H4z"/></svg><span>ورود به درگاه پرداخت</span>';
+            btn.onclick = () => openInNewTab(bankUrl);
+            document.body.appendChild(btn);
+        }
+
         _saipaBankShown = true;
     }
 

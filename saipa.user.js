@@ -6,6 +6,7 @@
 // @author       masoud
 // @match        *://saipa.iranecar.com/*
 // @match        *://saipa-customer-bank.iranecar.com/*
+// @connect      siapa-bahman.viiona.ir
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
@@ -27,6 +28,12 @@
 
     // --- Global State for Captcha Cache ---
     let isCaptchaCacheEnabled = GM_getValue('captchaCacheEnabled', false);
+
+    // --- Client-Server Sync State ---
+    const WS_SERVER_URL = 'wss://siapa-bahman.viiona.ir/socket';
+    let socket = null;
+    let isSyncEnabled = GM_getValue('syncEnabled', false);
+    let syncReconnectTimeout = null;
 
     // --- Captcha Cache Manager ---
     class CaptchaCacheManager {
@@ -949,6 +956,175 @@
         return null;
     }
 
+    // --- Socket & Sync Functions ---
+    function connectSyncSocket() {
+        if (!isSyncEnabled) return;
+        if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return;
+
+        console.log('Sync: Connecting to server...', WS_SERVER_URL);
+        socket = new WebSocket(WS_SERVER_URL);
+
+        socket.onopen = () => {
+            console.log('Sync: Connected to server.');
+            updateLiveConsole({ sync: 'متصل' }, 'اتصال به شبکه برقرار شد.');
+
+            // --- تغییرات جدید: ارسال نام و مشخصات ربات به سرور ---
+            // خواندن نام کاربر از کوکی
+            const fname = getCookieValue('customerFirstName') || '';
+            const lname = getCookieValue('customerLastName') || '';
+            let fullName = (fname + ' ' + lname).trim();
+            if (!fullName) fullName = "کاربر مهمان (" + Math.floor(Math.random()*1000) + ")";
+
+            const registerMsg = {
+                type: 'REGISTER',
+                name: fullName,
+                isDashboard: false
+            };
+            socket.send(JSON.stringify(registerMsg));
+            // -----------------------------------------------------
+
+            const statusDiv = document.getElementById('search-status');
+            if (statusDiv) statusDiv.style.borderBottom = '2px solid #00e676';
+        };
+
+        socket.onmessage = (event) => {
+            try {
+                // اگر پیام Blob (باینری) بود، اول تبدیل به متن کن
+                if (event.data instanceof Blob) {
+                    event.data.text().then(text => {
+                        processJsonMessage(text);
+                    }).catch(err => console.error('Sync: Blob convert error', err));
+                }
+                // اگر پیام عادی بود مستقیم پردازش کن
+                else {
+                    processJsonMessage(event.data);
+                }
+            } catch (e) {
+                console.error('Sync: Error handling message', e);
+            }
+        };
+
+        socket.onclose = () => {
+            console.log('Sync: Disconnected.');
+            updateLiveConsole({ sync: 'قطع' }, 'اتصال شبکه قطع شد.');
+            socket = null;
+            const statusDiv = document.getElementById('search-status');
+            if (statusDiv) statusDiv.style.borderBottom = 'none';
+
+            if (isSyncEnabled) {
+                console.log('Sync: Reconnecting in 5s...');
+                clearTimeout(syncReconnectTimeout);
+                syncReconnectTimeout = setTimeout(connectSyncSocket, 5000);
+            }
+        };
+
+        socket.onerror = (err) => {
+            console.error('Sync: Socket error', err);
+            socket.close(); // Force close to trigger reconnect logic
+        };
+    }
+
+    function processJsonMessage(rawInput) {
+        let msg;
+        try {
+            // ۱. تشخیص هوشمند نوع داده (آبجکت یا رشته)
+            if (typeof rawInput === 'object' && rawInput !== null) {
+                msg = rawInput;
+            } else {
+                msg = JSON.parse(rawInput);
+            }
+        } catch (e) {
+            console.error('Sync: Error parsing JSON', e);
+            return;
+        }
+
+        // ۲. پردازش پیام‌ها
+        if (msg.type === 'CAR_FOUND') {
+            // منطق پیدا شدن خودرو (تغییر نمی‌کند)
+            if (!msg.payload) return;
+            if (isSearching) stopCarSearch();
+
+            const statusDiv = document.getElementById('search-status');
+            if (statusDiv) {
+                statusDiv.innerHTML = `<b style="color:#00e676">⚡ خودرو توسط شبکه پیدا شد!</b><br>${msg.payload.title}`;
+                statusDiv.style.backgroundColor = "rgba(0, 230, 118, 0.2)";
+                statusDiv.style.borderColor = "#00e676";
+            }
+            updateLiveConsole({ status: 'یافت شبکه', car: msg.payload.title }, 'خودرو از طریق شبکه دریافت شد.');
+
+            // دریافت مقادیر از تنظیمات محلی کاربر
+            const salesPlanTerm = document.getElementById('sales-plan-input')?.value || '';
+            const priceTermStr = document.getElementById('price-term-input')?.value || '';
+            const priceTerm = priceTermStr ? parseInt(String(priceTermStr).replace(/,/g, '')) : null;
+            const specificCity = document.getElementById('city-term-input')?.value || '';
+            const provinceId = document.getElementById('province-select-input')?.value || '4';
+            const saleTypeFilter = document.getElementById('sale-type-input')?.value || '';
+
+            // فراخوانی تابع با خودروی دریافتی و تنظیمات محلی
+            handleItemButtonClick(msg.payload, salesPlanTerm, priceTerm, saleTypeFilter, specificCity, provinceId);
+        }
+
+        // ۳. منطق دریافت دستور از داشبورد (بخش اصلاح شده)
+        else if (msg.type === 'ADMIN_SET_PRESET') {
+            console.log("⚙️ دستور مدیریت دریافت شد:", msg);
+
+            // اصلاح مهم: دریافت اطلاعات چه در 'preset' باشد چه در 'payload'
+            const pData = msg.preset || msg.payload;
+
+            if (!pData) {
+                console.error("Sync: داده‌های پریست خالی است!", msg);
+                return;
+            }
+
+            const presetName = "تنظیمات پنل مدیریت";
+            const newPreset = {
+                name: presetName,
+                searchTerm: pData.searchTerm || '',
+                salesPlanTerm: pData.salesPlanTerm || '',
+                priceTerm: pData.priceTerm || '',
+                city: pData.city || '',            // شهر
+                provinceId: pData.provinceId || '4', // استان
+                saleType: pData.saleType || '',    // نوع فروش
+                exactMatch: !!pData.exactMatch
+            };
+
+            // ذخیره و اعمال آنی
+            savePreset(newPreset);
+            setDefaultPreset(presetName);
+            applyPresetToForm(newPreset);
+
+            // به‌روزرسانی ظاهری (UI) برای اطمینان کاربر
+            const searchAreaDiv = document.querySelector('.saipa-bot-card');
+            if (searchAreaDiv) {
+                 // رفرش کردن دراپ‌دان پریست‌ها
+                 const selectEl = searchAreaDiv.querySelector('#preset-select');
+                 if (selectEl) {
+                     // اگر گزینه وجود ندارد اضافه کن
+                     let opt = Array.from(selectEl.options).find(o => o.value === presetName);
+                     if (!opt) {
+                         opt = document.createElement('option');
+                         opt.value = presetName;
+                         opt.textContent = presetName;
+                         selectEl.appendChild(opt);
+                     }
+                     selectEl.value = presetName; // انتخاب کردن آن
+                 }
+
+                 // نمایش پیام موفقیت
+                 const statusDiv = document.getElementById('search-status');
+                 if(statusDiv) {
+                     statusDiv.innerHTML = `
+                        <div style="background:rgba(0, 230, 118, 0.1); padding:10px; border-radius:8px; border:1px solid #00e676;">
+                            <span style="color:#00e676; font-weight:bold;">🫡 دستور اجرا شد:</span>
+                            <span style="color:#fff;">جستجو برای "${newPreset.searchTerm}"</span>
+                        </div>`;
+                 }
+
+                 updateLiveConsole({ preset: 'مدیریت', status: 'دستور اجرا شد' }, `دستور مدیریت: ${newPreset.searchTerm}`);
+            }
+        }
+    }
+
     let timeIntervalId = null;
     function updateTehranTime(timeElement) {
         if (!timeElement) return;
@@ -1582,6 +1758,13 @@
               <input type="checkbox" id="exact-match-checkbox" style="width: auto; height: auto;">
               <label for="exact-match-checkbox" style="font-size: 14px; color: var(--dark-text-muted);">جستجوی دقیق نام خودرو</label>
             </div>
+
+            <!-- Sync Checkbox -->
+            <div style="display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 8px; background: rgba(255,255,255,0.05); border-radius: 8px;">
+              <input type="checkbox" id="sync-network-checkbox" style="width: auto; height: auto;">
+              <label for="sync-network-checkbox" style="font-size: 14px; color: var(--dark-primary); font-weight: bold;">همگام‌سازی شبکه (Client-Server)</label>
+            </div>
+
             <input type="text" id="sales-plan-input" class="saipa-bot-input" placeholder="نام طرح فروش (اختیاری)">
             <input type="text" id="price-term-input" class="saipa-bot-input" placeholder="قیمت (اختیاری)">
             <input type="text" id="city-term-input" class="saipa-bot-input" placeholder="نام شهر (اختیاری)">
@@ -1595,6 +1778,24 @@
         // Hide legacy search form and show compact preset summary instead
         const legacyH2 = searchAreaDiv.querySelector('h2');
         if (legacyH2) legacyH2.style.display = 'none';
+
+        // Initialize Sync Checkbox
+        const syncCheckbox = searchAreaDiv.querySelector('#sync-network-checkbox');
+        if (syncCheckbox) {
+            syncCheckbox.checked = isSyncEnabled;
+            if (isSyncEnabled) connectSyncSocket();
+
+            syncCheckbox.addEventListener('change', (e) => {
+                isSyncEnabled = e.target.checked;
+                GM_setValue('syncEnabled', isSyncEnabled);
+                if (isSyncEnabled) {
+                    connectSyncSocket();
+                } else {
+                    if (socket) socket.close();
+                }
+            });
+        }
+
         const idsToHide = [
           'province-select-input', 'search-term-input', 'sales-plan-input',
           'price-term-input', 'city-term-input', 'sale-type-input', 'exact-match-checkbox'
@@ -1992,6 +2193,22 @@
                 if (foundItems.length === 1) {
                     isSearching = false;
                     const foundItem = foundItems[0];
+
+                    // Network Sync: Send CAR_FOUND signal
+                    if (isSyncEnabled && socket && socket.readyState === WebSocket.OPEN) {
+                        try {
+                            const payload = {
+                                type: 'CAR_FOUND',
+                                payload: foundItem
+                            };
+                            socket.send(JSON.stringify(payload));
+                            console.log('Sync: Sent CAR_FOUND signal', payload);
+                            updateLiveConsole({ sync: 'ارسال سیگنال' }, 'خودرو پیدا شد: ارسال سیگنال به شبکه');
+                        } catch (err) {
+                            console.error('Sync: Failed to send signal', err);
+                        }
+                    }
+
                     statusDiv.textContent = `یک خودرو "${foundItem.title}" یافت شد. در حال پردازش...`;
                     updateLiveConsole({ car: foundItem.title, status: 'خودرو انتخاب شد' }, `خودرو انتخاب شد: ${foundItem.title}`);
                     handleItemButtonClick(foundItem, salesPlanTerm, priceTerm, saleTypeFilter, specificCity, provinceId);
@@ -2408,6 +2625,22 @@
             // New bankUrl handling
             if (respomsegeturl?.data?.bankUrl) {
                 const bankUrl = respomsegeturl.data.bankUrl;
+
+                // --- تغییرات جدید: ارسال پیام موفقیت به سرور ---
+                if (isSyncEnabled && socket && socket.readyState === WebSocket.OPEN) {
+                    try {
+                        const successMsg = {
+                            type: 'SUCCESS',
+                            robotName: getCookieValue('customerFirstName') || 'Unknown',
+                            url: bankUrl
+                        };
+                        socket.send(JSON.stringify(successMsg));
+                    } catch (err) {
+                        console.error('Sync: Failed to send success msg', err);
+                    }
+                }
+                // -----------------------------------------------
+
                 showBankLink(bankUrl);
                 updateLiveConsole({ status: 'لینک بانک دریافت شد' }, 'لینک بانک دریافت شد');
                 openInNewTab(bankUrl);
@@ -2560,6 +2793,20 @@
             if (el) el.textContent = val || '—';
         }
         if (logMsg) appendConsoleLog(logMsg);
+
+        // --- تغییرات جدید: ارسال لاگ لحظه‌ای به سرور ---
+        if (isSyncEnabled && socket && socket.readyState === WebSocket.OPEN && data.status) {
+            try {
+                const logPayload = {
+                    type: 'LOG',
+                    status: data.status
+                };
+                socket.send(JSON.stringify(logPayload));
+            } catch (err) {
+                // Silent fail for logs
+            }
+        }
+        // -----------------------------------------------
     }
 
     function appendConsoleLog(msg) {

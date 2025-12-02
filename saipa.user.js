@@ -1479,28 +1479,67 @@
         presetRow.style.gap = '10px';
         presetRow.style.alignItems = 'center';
         presetRow.style.marginTop = '6px';
+        presetRow.style.flexWrap = 'wrap'; // Allow wrapping for better layout
         const presetSelect = buildPresetDropdown();
-        presetSelect.style.flex = '1 1 auto';
+        presetSelect.style.flex = '1 1 100%'; // Take full width on top line or split
+
+        // Create button container for better control
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.display = 'flex';
+        buttonContainer.style.gap = '8px';
+        buttonContainer.style.flexWrap = 'wrap';
+        buttonContainer.style.justifyContent = 'center';
+        buttonContainer.style.width = '100%';
+
         const newPresetBtn = document.createElement('button');
         newPresetBtn.type = 'button';
-        newPresetBtn.textContent = 'افزودن';
+        newPresetBtn.innerHTML = '<span>افزودن</span>';
         newPresetBtn.className = 'saipa-bot-button saipa-bot-button-secondary';
         newPresetBtn.style.setProperty('width', 'auto', 'important');
+        newPresetBtn.style.setProperty('min-width', '80px', 'important');
+
+        const editPresetBtn = document.createElement('button');
+        editPresetBtn.type = 'button';
+        editPresetBtn.innerHTML = '<span>ویرایش</span>';
+        editPresetBtn.className = 'saipa-bot-button saipa-bot-button-secondary';
+        editPresetBtn.style.setProperty('width', 'auto', 'important');
+        editPresetBtn.style.setProperty('min-width', '80px', 'important');
+
         const deletePresetBtn = document.createElement('button');
         deletePresetBtn.type = 'button';
-        deletePresetBtn.textContent = 'حذف';
+        deletePresetBtn.innerHTML = '<span>حذف</span>';
         deletePresetBtn.className = 'saipa-bot-button saipa-bot-button-secondary';
         deletePresetBtn.style.setProperty('width', 'auto', 'important');
+        deletePresetBtn.style.setProperty('min-width', '80px', 'important');
+        deletePresetBtn.style.setProperty('background', 'rgba(229, 57, 53, 0.15)', 'important');
+        deletePresetBtn.style.setProperty('border-color', 'rgba(229, 57, 53, 0.5)', 'important');
+        deletePresetBtn.style.setProperty('color', 'var(--dark-danger)', 'important');
+
+        const deleteAllPresetsBtn = document.createElement('button');
+        deleteAllPresetsBtn.type = 'button';
+        deleteAllPresetsBtn.innerHTML = '<span>حذف همه</span>';
+        deleteAllPresetsBtn.className = 'saipa-bot-button saipa-bot-button-secondary';
+        deleteAllPresetsBtn.style.setProperty('width', 'auto', 'important');
+        deleteAllPresetsBtn.style.setProperty('min-width', '90px', 'important');
+        deleteAllPresetsBtn.style.setProperty('background', 'var(--dark-danger)', 'important');
+        deleteAllPresetsBtn.style.setProperty('color', 'white', 'important');
+        deleteAllPresetsBtn.style.setProperty('border-color', 'var(--dark-danger)', 'important');
+
         const setDefaultBtn = document.createElement('button');
         setDefaultBtn.type = 'button';
-        setDefaultBtn.textContent = 'پیشفرض';
+        setDefaultBtn.innerHTML = '<span>پیشفرض</span>';
         setDefaultBtn.className = 'saipa-bot-button saipa-bot-button-secondary';
         setDefaultBtn.style.setProperty('width', 'auto', 'important');
+        setDefaultBtn.style.setProperty('min-width', '90px', 'important');
+
+        buttonContainer.appendChild(newPresetBtn);
+        buttonContainer.appendChild(editPresetBtn);
+        buttonContainer.appendChild(deletePresetBtn);
+        buttonContainer.appendChild(setDefaultBtn);
+        buttonContainer.appendChild(deleteAllPresetsBtn);
 
         presetRow.appendChild(presetSelect);
-        presetRow.appendChild(newPresetBtn);
-        presetRow.appendChild(deletePresetBtn);
-        presetRow.appendChild(setDefaultBtn);
+        presetRow.appendChild(buttonContainer);
         searchAreaDiv.appendChild(presetRow);
 
         // Preset editor (hidden until opened)
@@ -1583,6 +1622,15 @@
                 const raw = String(p.priceTerm).replace(/,/g, '');
                 priceDisplay = raw && !isNaN(raw) ? Number(raw).toLocaleString('en-US') : String(p.priceTerm);
             }
+
+            // Inline Edit/Delete buttons for current preset
+            const buttonsHtml = `
+                <div style="display:flex; gap:10px; justify-content:center; margin-top:10px;">
+                    <button class="saipa-bot-button saipa-bot-button-secondary" id="inline-edit-preset" style="height:30px !important; font-size:12px !important; width:auto !important; padding:0 12px !important;">ویرایش</button>
+                    <button class="saipa-bot-button saipa-bot-button-secondary" id="inline-delete-preset" style="height:30px !important; font-size:12px !important; width:auto !important; padding:0 12px !important; color:var(--dark-danger) !important; border-color:rgba(229,57,53,0.5) !important; background:rgba(229,57,53,0.1) !important;">حذف</button>
+                </div>
+            `;
+
             presetSummary.innerHTML = `
                 <h3 style="margin:0;text-align:center;color: var(--dark-primary)">پریست انتخاب‌شده: ${p.name}</h3>
                 <div style="display:grid;grid-template-columns:120px 1fr;gap:8px;">
@@ -1594,7 +1642,36 @@
                   <div style="color:var(--dark-text-muted)">نوع فروش</div><div>${p.saleType || ''}</div>
                   <div style="color:var(--dark-text-muted)">دقیق</div><div>${p.exactMatch ? 'بله' : 'خیر'}</div>
                 </div>
+                ${buttonsHtml}
             `;
+
+            // Attach handlers for inline buttons
+            setTimeout(() => {
+                const editBtn = presetSummary.querySelector('#inline-edit-preset');
+                const delBtn = presetSummary.querySelector('#inline-delete-preset');
+
+                if (editBtn) {
+                    editBtn.onclick = () => {
+                         // Trigger the main edit logic
+                         const selectEl = searchAreaDiv.querySelector('#preset-select');
+                         if (selectEl) {
+                             selectEl.value = p.name;
+                             // Manually trigger edit button click or reuse logic
+                             const mainEditBtn = searchAreaDiv.querySelector('button:nth-of-type(2)'); // The main edit button we created earlier is 2nd in the container if counted directly, but let's be safe and assume logic reuse
+                             if (editPresetBtn) editPresetBtn.click();
+                         }
+                    };
+                }
+                if (delBtn) {
+                    delBtn.onclick = () => {
+                         const selectEl = searchAreaDiv.querySelector('#preset-select');
+                         if (selectEl) {
+                             selectEl.value = p.name;
+                             if (deletePresetBtn) deletePresetBtn.click();
+                         }
+                    };
+                }
+            }, 0);
         };
         searchAreaDiv.appendChild(presetSummary);
 
@@ -1664,6 +1741,9 @@
             presetEditor.style.flexDirection = 'column';
             const nameInput = presetEditor.querySelector('#preset-name-input');
             const defaultChk = presetEditor.querySelector('#preset-default-checkbox');
+            // Clear all fields for new preset
+            if (nameInput) nameInput.value = '';
+            if (defaultChk) defaultChk.checked = false;
             const eProvince = presetEditor.querySelector('#editor-province-select');
             const eSearch = presetEditor.querySelector('#editor-search-term-input');
             const eSales = presetEditor.querySelector('#editor-sales-plan-input');
@@ -1671,15 +1751,51 @@
             const eCity = presetEditor.querySelector('#editor-city-term-input');
             const eSaleType = presetEditor.querySelector('#editor-sale-type-input');
             const eExact = presetEditor.querySelector('#editor-exact-match-checkbox');
-            if (nameInput) nameInput.value = '';
-            if (defaultChk) defaultChk.checked = false;
-            if (eProvince) eProvince.value = document.getElementById('province-select-input').value;
-            if (eSearch) eSearch.value = document.getElementById('search-term-input').value.trim();
-            if (eSales) eSales.value = document.getElementById('sales-plan-input').value.trim();
-            if (ePrice) ePrice.value = document.getElementById('price-term-input').value.trim();
-            if (eCity) eCity.value = document.getElementById('city-term-input').value.trim();
-            if (eSaleType) eSaleType.value = document.getElementById('sale-type-input').value;
-            if (eExact) eExact.checked = document.getElementById('exact-match-checkbox').checked;
+
+            if (eProvince) eProvince.value = '4';
+            if (eSearch) eSearch.value = '';
+            if (eSales) eSales.value = '';
+            if (ePrice) ePrice.value = '';
+            if (eCity) eCity.value = '';
+            if (eSaleType) eSaleType.value = '';
+            if (eExact) eExact.checked = false;
+        });
+
+        // Edit preset handler
+        editPresetBtn.addEventListener('click', () => {
+            const selectEl = searchAreaDiv.querySelector('#preset-select');
+            const selectedName = selectEl ? selectEl.value : '';
+            if (!selectedName) { alert('هیچ پریستی برای ویرایش انتخاب نشده است.'); return; }
+
+            const presets = loadPresets();
+            const preset = presets.find(p => p.name === selectedName);
+            if (!preset) return;
+
+            presetEditor.style.display = 'flex';
+            presetEditor.style.flexDirection = 'column';
+
+            const nameInput = presetEditor.querySelector('#preset-name-input');
+            const defaultChk = presetEditor.querySelector('#preset-default-checkbox');
+            const eProvince = presetEditor.querySelector('#editor-province-select');
+            const eSearch = presetEditor.querySelector('#editor-search-term-input');
+            const eSales = presetEditor.querySelector('#editor-sales-plan-input');
+            const ePrice = presetEditor.querySelector('#editor-price-term-input');
+            const eCity = presetEditor.querySelector('#editor-city-term-input');
+            const eSaleType = presetEditor.querySelector('#editor-sale-type-input');
+            const eExact = presetEditor.querySelector('#editor-exact-match-checkbox');
+
+            if (nameInput) nameInput.value = preset.name;
+            // Check if it's default
+            const currentDefault = GM_getValue('saipa_default_preset', '');
+            if (defaultChk) defaultChk.checked = (currentDefault === preset.name);
+
+            if (eProvince) eProvince.value = preset.provinceId || '4';
+            if (eSearch) eSearch.value = preset.searchTerm || '';
+            if (eSales) eSales.value = preset.salesPlanTerm || '';
+            if (ePrice) ePrice.value = preset.priceTerm || '';
+            if (eCity) eCity.value = preset.city || '';
+            if (eSaleType) eSaleType.value = preset.saleType || '';
+            if (eExact) eExact.checked = !!preset.exactMatch;
         });
 
         // Save preset handler (from editor)
@@ -1727,6 +1843,22 @@
                 presetEditor.style.display = 'none';
             });
         }
+
+        // Delete all presets handler
+        deleteAllPresetsBtn.addEventListener('click', () => {
+            if (!confirm("آیا مطمئن هستید که می‌خواهید تمام پریست‌ها را حذف کنید؟ این عملیات غیرقابل بازگشت است.")) return;
+            GM_setValue('saipa_search_presets', []);
+            GM_setValue('saipa_default_preset', ''); // Also clear default
+
+            // Refresh dropdown
+            const selectEl = searchAreaDiv.querySelector('#preset-select');
+            const newSelect = buildPresetDropdown();
+            newSelect.style.flex = '1 1 auto';
+            presetRow.replaceChild(newSelect, selectEl);
+
+            // Clear summary
+            renderPresetSummary(null);
+        });
 
         // Delete preset handler
         deletePresetBtn.addEventListener('click', () => {
